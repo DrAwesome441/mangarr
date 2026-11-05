@@ -50,6 +50,12 @@ edges, and please [report what you find](#reporting-bugs). Mangarr does not upda
 watch the [releases](https://github.com/opentomedb/mangarr/releases) or Discord #beta for new
 images. See [Known limitations](#known-limitations) before you start.
 
+## AI disclosure
+
+Mangarr's changes on top of Readarr are written largely with an AI coding assistant (Claude Code)
+under the maintainer's direction. Each release passes the automated test suite and runs on the
+maintainer's own library before it is published.
+
 ## Install
 
 Mangarr ships as a Docker image: `ghcr.io/opentomedb/mangarr:beta`.
