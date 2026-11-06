@@ -394,6 +394,79 @@ namespace NzbDrone.Core.Parser
                 || VolSingleRegex.IsMatch(text);
         }
 
+        // True when a FILE name says which volume it is, read the way the importer reads file names
+        // (TryParseSeriesVolume): '_' and the dots between words are separators, and the series' own
+        // edition tokens count ("Tome 5", "Band 3") -- "Series_v14", "Series.Vol.14" and "Series Vol 14"
+        // all name volume 14, and HasVolumeToken on the raw name misses the first ('_' is a word
+        // character, so there is no boundary before the "v"). Unlike TryParseSeriesVolume it needs
+        // no series text before the token ("v14.cbz" names a volume too).
+        public static bool FileNamesVolume(string fileName, string editionLanguage = null, System.Func<string, bool> isAcceptedSeries = null)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var normalized = Regex.Replace(name.Replace('_', ' '), @"(?<!\d)\.(?!\d)", " ");
+
+            return HasVolumeToken(EditionVolumeTokens.Rewrite(normalized, editionLanguage, isAcceptedSeries));
+        }
+
+        // A grab named ONE volume; may its one file, whose name has no volume token, take that volume? Only
+        // when no number in the name could be another volume: every number is the grabbed volume's own (any
+        // padding: "13", "013") or a four-digit year. Any other number -- "Series 12" for a grab of volume 13,
+        // "Vol#14", "v14a", an obfuscated "x7k" -- answers no, and the file keeps per-file identification. It
+        // fails closed: the worst case is the stuck download of before, never a volume filed under another's number.
+        private static readonly Regex NumberRegex = new Regex(@"\d+(?:\.\d{1,2}(?!\d))?", RegexOptions.Compiled);
+        private static readonly Regex YearRegex = new Regex(@"^(?:19|20)\d{2}$", RegexOptions.Compiled);
+
+        public static bool FileNameAllowsVolume(string fileName, double volumeNumber)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            foreach (Match number in NumberRegex.Matches(name))
+            {
+                if (YearRegex.IsMatch(number.Value))
+                {
+                    continue;
+                }
+
+                // \d also matches digits of other scripts (full-width "１３", Arabic-Indic ...), which the
+                // invariant parse refuses: a number that cannot be read could be another volume, so it
+                // answers no like any other number -- never an exception on a file name.
+                if (double.TryParse(number.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value) &&
+                    System.Math.Abs(value - volumeNumber) < 0.001)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        // The one rule for "this file is the volume the grab named" (2026-11-06), asked by the automatic
+        // import and by the manual-import proposal alike: the ONE book file of a grab of ONE manga volume
+        // takes that volume when its name does not name a volume itself (FileNamesVolume), carries no
+        // number that could be another volume (FileNameAllowsVolume) and no chapter token in any
+        // market's wording. A cut-off scene name ("xx-sample.series.volume..pdf", "xx-sample.series.13.the..pdf")
+        // passes; everything else keeps per-file identification.
+        public static bool FileTakesGrabbedVolume(string fileName, double volumeNumber, string editionLanguage = null, System.Func<string, bool> isAcceptedSeries = null)
+        {
+            return !FileNamesVolume(fileName, editionLanguage, isAcceptedSeries) &&
+                   FileNameAllowsVolume(fileName, volumeNumber) &&
+                   !IsChapterOnlyFile(fileName) &&
+                   !ChapterReleaseParser.HasChapterToken(Path.GetFileNameWithoutExtension(fileName));
+        }
+
         // True when the file name carries an explicit chapter token and NO volume token.
         // Volume wins: "ReZERO...Chapter.4...v07.cbz" is a real volume whose series title
         // contains "Chapter" and must return false. Bare-number files ("001.cbz") are

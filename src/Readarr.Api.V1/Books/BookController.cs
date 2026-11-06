@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.AuthorStats;
 using NzbDrone.Core.Books;
+using NzbDrone.Core.Books.Chapters;
 using NzbDrone.Core.Books.Events;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DecisionEngine.Specifications;
@@ -66,6 +67,28 @@ namespace Readarr.Api.V1.Books
             PostValidator.RuleFor(s => s.Author.ForeignAuthorId).NotEmpty();
         }
 
+        // Chapter data (2026-11-06): each manga volume's first and last chapter, where the catalogue's
+        // list is one the chapter builder would use. books must hold every volume of each series the
+        // resources belong to -- the rule reads the neighbouring volumes.
+        private static List<BookResource> LinkChapterSpans(List<BookResource> resources, List<Book> books)
+        {
+            var spans = books
+                .GroupBy(b => b.AuthorMetadataId)
+                .SelectMany(series => ChapterVolumePlanner.TrustedSpans(series, MediaType.Archive))
+                .ToDictionary(x => x.Key, x => x.Value);
+
+            foreach (var resource in resources)
+            {
+                if (spans.TryGetValue(resource.Id, out var span))
+                {
+                    resource.ChapterFirst = span.First;
+                    resource.ChapterLast = span.Last;
+                }
+            }
+
+            return resources;
+        }
+
         [HttpGet]
         public List<BookResource> GetBooks([FromQuery]int? authorId,
             [FromQuery]List<int> bookIds,
@@ -98,7 +121,7 @@ namespace Readarr.Api.V1.Books
                     }
                 }
 
-                return MapToResource(books, false);
+                return LinkChapterSpans(MapToResource(books, false), books);
             }
 
             if (authorId.HasValue)
@@ -123,7 +146,7 @@ namespace Readarr.Api.V1.Books
                     }
                 }
 
-                return MapToResource(books, false);
+                return LinkChapterSpans(MapToResource(books, false), books);
             }
 
             if (titleSlug.IsNotNullOrWhiteSpace())
@@ -135,13 +158,16 @@ namespace Readarr.Api.V1.Books
                     return MapToResource(new List<Book>(), false);
                 }
 
+                // Chapter data (2026-11-06): the span rule reads the whole series either way.
+                var seriesBooks = _bookService.GetBooksByAuthor(book.AuthorId);
+
                 if (includeAllAuthorBooks)
                 {
-                    return MapToResource(_bookService.GetBooksByAuthor(book.AuthorId), false);
+                    return LinkChapterSpans(MapToResource(seriesBooks, false), seriesBooks);
                 }
                 else
                 {
-                    return MapToResource(new List<Book> { book }, false);
+                    return LinkChapterSpans(MapToResource(new List<Book> { book }, false), seriesBooks);
                 }
             }
 

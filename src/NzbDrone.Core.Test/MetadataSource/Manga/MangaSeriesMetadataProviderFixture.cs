@@ -1897,6 +1897,94 @@ namespace NzbDrone.Core.Test.MetadataSource.Manga
             _log.Logs.Should().Contain("Info|Volume metadata Fairy Tail: descriptions 1/1 (isbn 1, title 0, none 0), covers 1/1 (opentome 0, mangadex-en 0, google 1, pin 0, series 0), poster via google");
         }
 
+        // Manga volume titles (2026-11-06, GitHub #3): a manga volume takes its own title the way a
+        // light novel does, from the catalogue's volume title only, through the same gate. An invented
+        // series: a bound manga line and its rows.
+        private const string SampleIsbn = "9780000000019";
+
+        private void GivenSampleManga(params GcdVolume[] rows)
+        {
+            Mocker.GetMock<IAniListService>()
+                  .Setup(s => s.GetById(900001))
+                  .Returns(Bound(900001, "id", "Sample Saga"));
+            GivenCatalogueLine("Sample Saga", LibraryType.Manga, Line(9001, "Sample Saga", rows.Length));
+            Mocker.GetMock<IGcdMetadataService>()
+                  .Setup(s => s.GetVolumes(9001))
+                  .Returns(rows.ToList());
+        }
+
+        private void GivenSampleRecord(string title, string subtitle = null)
+        {
+            Mocker.GetMock<IGoogleBooksService>()
+                  .Setup(s => s.LookupByIsbn(SampleIsbn))
+                  .Returns(new VolumeDetails { Isbn13 = SampleIsbn, Title = title, Subtitle = subtitle, Description = EnglishBlurb, CoverUrl = GoogleCover, CoverSize = "large", Language = "en", PageCount = 192, ReleaseDate = new DateTime(2021, 5, 4) });
+        }
+
+        private MangaVolumeMetadata RefreshSampleMangaVolume()
+        {
+            return Subject.GetSeries("Sample Saga", 0, resolveVolumeDetails: true, LibraryType.Manga, anilistId: 900001).Volumes.Single();
+        }
+
+        [Test]
+        public void a_manga_volume_takes_the_catalogue_volume_title()
+        {
+            var row = Row(1, SampleIsbn);
+            row.Title = "The Sample Arc";
+            GivenSampleManga(row);
+            GivenSampleRecord("Sample Saga 1: Something Else");
+
+            var vol = RefreshSampleMangaVolume();
+
+            vol.Subtitle.Should().Be("The Sample Arc");
+            vol.SubtitleRejected.Should().BeFalse();
+        }
+
+        [TestCase("The Sample Saga Corps Gathers")]
+        [TestCase("Go Get 'Em, Sample Saga")]
+        public void a_manga_catalogue_title_may_carry_the_series_name_inside(string catalogueTitle)
+        {
+            var row = Row(1, SampleIsbn);
+            row.Title = catalogueTitle;
+            GivenSampleManga(row);
+            GivenSampleRecord("Sample Saga");
+
+            var vol = RefreshSampleMangaVolume();
+
+            vol.Subtitle.Should().Be(catalogueTitle);
+            vol.SubtitleRejected.Should().BeFalse();
+        }
+
+        // Only the catalogue names a manga volume: a Google record's subtitle is not taken (too often the
+        // series' own tagline or another book's), and a title stored from one is cleared.
+        [TestCase("Sample Saga 1: The Sample Arc", null)]
+        [TestCase("Sample Saga, Vol. 1", "The Sample Arc")]
+        public void a_manga_volume_without_a_catalogue_title_takes_none_from_the_isbn_record(string recordTitle, string recordSubtitle)
+        {
+            GivenSampleManga(Row(1, SampleIsbn));
+            GivenSampleRecord(recordTitle, recordSubtitle);
+
+            var vol = RefreshSampleMangaVolume();
+
+            vol.Subtitle.Should().BeNull();
+            vol.SubtitleRejected.Should().BeTrue();
+        }
+
+        [TestCase("Vol. 1")]
+        [TestCase("Sample Saga")]
+        [TestCase("Volume One")]
+        public void a_manga_volume_title_that_names_nothing_is_rejected(string catalogueTitle)
+        {
+            var row = Row(1, SampleIsbn);
+            row.Title = catalogueTitle;
+            GivenSampleManga(row);
+            GivenSampleRecord("Sample Saga");
+
+            var vol = RefreshSampleMangaVolume();
+
+            vol.Subtitle.Should().BeNull();
+            vol.SubtitleRejected.Should().BeTrue();
+        }
+
         [Test]
         public void the_light_novel_lookup_path_does_not_ask_audible()
         {

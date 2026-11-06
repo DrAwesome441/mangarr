@@ -12,6 +12,7 @@ import TableSelectCell from 'Components/Table/Cells/TableSelectCell';
 import TableRow from 'Components/Table/TableRow';
 import Popover from 'Components/Tooltip/Popover';
 import { icons, kinds, tooltipPositions } from 'Helpers/Props';
+import formatChapterSpan from 'Utilities/Book/formatChapterSpan';
 import formatRuntime from 'Utilities/Book/formatRuntime';
 import isVolumeReleased from 'Utilities/Book/isVolumeReleased';
 import { AUDIO } from 'Utilities/Book/mediaTypes';
@@ -92,6 +93,8 @@ class BookRow extends Component {
       authorName,
       position,
       pageCount,
+      chapterFirst,
+      chapterLast,
       ratings,
       isSaving,
       authorMonitored,
@@ -272,6 +275,17 @@ class BookRow extends Component {
               );
             }
 
+            if (name === 'chapters') {
+              return (
+                <TableRowCell
+                  key={name}
+                  className={styles.chapters}
+                >
+                  {formatChapterSpan(chapterFirst, chapterLast) || ''}
+                </TableRowCell>
+              );
+            }
+
             if (name === 'indexerFlags') {
               return (
                 <TableRowCell
@@ -346,6 +360,8 @@ BookRow.propTypes = {
   authorName: PropTypes.string.isRequired,
   position: PropTypes.string,
   pageCount: PropTypes.number,
+  chapterFirst: PropTypes.number,
+  chapterLast: PropTypes.number,
   ratings: PropTypes.object.isRequired,
   indexerFlags: PropTypes.number.isRequired,
   titleSlug: PropTypes.string.isRequired,

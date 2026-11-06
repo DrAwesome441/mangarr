@@ -21,14 +21,23 @@ namespace Readarr.Api.V1.Books
         public string Subtitle { get; set; }
 
         // UI pass (2026-09-24, V1): a light-novel volume's display title (LightNovelTitles.DisplayOf,
-        // the string calibre and Audiobookshelf carry); null for manga. Read-only, additive.
+        // the string calibre and Audiobookshelf carry). Manga volume titles (2026-11-06, GitHub #3): a
+        // manga volume with a title of its own has one too; "" for a manga volume without (the page
+        // shows its own title). Read-only, additive.
         public string DisplayTitle { get; set; }
 
         // Full-title subtitles (2026-09-24): the subtitle as the display title shows it
         // (LightNovelTitles.DisplaySubtitleOf) -- the series page row reads "Vol. N: <this>"; "" for a
-        // light-novel volume with none (so the frontend's merge clears a stale value), null for
-        // manga. Read-only, additive.
+        // volume with none (so the frontend's merge clears a stale value). Read-only, additive.
         public string DisplaySubtitle { get; set; }
+
+        // Chapter data (2026-11-06): the first and last chapter a manga volume holds, where the
+        // catalogue's list is one the chapter builder would use (ChapterVolumePlanner.TrustedSpans);
+        // absent otherwise. Linked only by requests that map a whole series (the rule needs the
+        // neighbouring volumes): a single-volume update carries none and the frontend's merge keeps
+        // what the list gave. Read-only, additive.
+        public double? ChapterFirst { get; set; }
+        public double? ChapterLast { get; set; }
         public string AuthorTitle { get; set; }
         public string SeriesTitle { get; set; }
         public string Disambiguation { get; set; }

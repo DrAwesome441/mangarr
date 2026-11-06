@@ -1410,6 +1410,25 @@ namespace NzbDrone.Core.MetadataSource.Manga
                 }
             }
 
+            // Manga volume titles (2026-11-06, GitHub #3): a manga volume's own title is the catalogue's
+            // volume title, through the gate a light novel's passes (MangaTitleOf). Only the catalogue:
+            // the first full-library run also took the Google ISBN record's subtitle, and 2 of the 11 titles
+            // it added were wrong (the series' own tagline; a subtitle that belongs to another book), with
+            // nothing in the record to tell them from the 9 good ones. So a volume the catalogue names no
+            // title for has none, and a stored one is cleared (SubtitleRejected) -- nothing else writes a
+            // manga volume's subtitle. Like every per-volume field it comes with the volume details (the
+            // lookup path's volumes are numbers only). A light novel's are set by the Audible step and the
+            // re-admission pass above; nothing reads a manga's subtitle but the display (searches use it
+            // for the Audio edition only).
+            if (library != LibraryType.LightNovel && resolveVolumeDetails)
+            {
+                foreach (var volume in volumes)
+                {
+                    volume.Subtitle = MangaTitleOf(volume.ArtifactTitle, displayName, recordKeys, volume.VolumeNumber, textLanguage, fallback && editionLine != null);
+                    volume.SubtitleRejected = volume.Subtitle == null;
+                }
+            }
+
             // Preferred Edition (2026-09-24, D6): a year/month-precision date is a deliberate stand-in
             // (Dec 31, a month's end); volumes sharing it are no batch stamp and it is no outlier. Edition
             // path only -- the English list is passed whole, as before.
@@ -1869,6 +1888,17 @@ namespace NzbDrone.Core.MetadataSource.Manga
             return English(Subtitles.Derive(null, artifactTitle, null, displayName, recordKeys, volumeNumber, trustedArtifactCandidate: true, editionLanguage: editionLanguage))
                 ?? English(Subtitles.Derive(single?.Title, single?.Subtitle, null, displayName, recordKeys, volumeNumber, editionLanguage: editionLanguage))
                 ?? English(Subtitles.Derive(record?.Title, record?.Subtitle, record?.SeriesBookTitle, displayName, recordKeys, volumeNumber, editionLanguage: editionLanguage));
+        }
+
+        // Manga volume titles (2026-11-06): a manga volume's own title -- the catalogue's volume title through the
+        // subtitle gate (a bare volume label, the series' name on its own, an edition label are no title), except
+        // that the series' name INSIDE a real title is fine ("Go Get 'Em, <Series>"): the catalogue's titles are
+        // already filtered, and the rule against the name anywhere exists for Audible / Google fields.
+        internal static string MangaTitleOf(string artifactTitle, string displayName, List<string> recordKeys, double volumeNumber, string editionLanguage = null, bool englishOnly = false)
+        {
+            var derived = Subtitles.Derive(null, artifactTitle, null, displayName, recordKeys, volumeNumber, trustedArtifactCandidate: true, editionLanguage: editionLanguage, allowSeriesInside: true);
+
+            return englishOnly && derived != null && GoogleBooksService.HasCjkScript(derived) ? null : derived;
         }
 
         // Fix round 3 (2026-09-24): distinguishes "SubtitleOf found nothing to work with this pass"

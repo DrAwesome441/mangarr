@@ -223,6 +223,26 @@ namespace NzbDrone.Core.MediaFiles
                 ApplyKnownBook(idOverrides, book, DominantExtension(audioFiles, author.Library), author, "Folder grab");
             }
 
+            // Release-trusted import, manga (2026-11-06): a usenet grab of ONE volume lands as a folder, and
+            // some releases name the file inside with a cut-off scene name that carries no volume number
+            // ("xx-sample.series.volume..pdf"). The file cannot say which volume it is, so identification
+            // scored it against every volume, failed ("not close enough") and the download sat in the queue,
+            // although the grab named exactly one volume. A manga folder that holds ONE book file whose name
+            // has no volume token takes the grab's volume, as a single-file download does (ProcessFile). A
+            // file that names a volume keeps per-file identification (D7), so a release that delivers
+            // another volume than it announced is still judged by its own name -- read the way the
+            // importer reads file names (FileNamesVolume: '_' and dots as separators, the series' own
+            // edition tokens); so does a folder with several book files. The rule fails closed: any
+            // number in the name that is neither the grabbed volume's nor a year keeps identification
+            // too (FileNameAllowsVolume: "Series 12", "v14a", an obfuscated "x7k"), and a chapter-named
+            // file is never forced onto a volume, in any market's wording (CompletedDownloadService
+            // drops the book for a lone one, but counts sidecar files, so it is asked again here).
+            else if (book != null && author != null && author.Library != LibraryType.LightNovel && audioFiles.Count == 1 &&
+                     TakesTheGrabsVolume(audioFiles[0].Name, book, author))
+            {
+                ApplyKnownBook(idOverrides, book, audioFiles[0].Extension, author, "Folder grab (one file, no volume in its name)");
+            }
+
             var idInfo = new ImportDecisionMakerInfo
             {
                 DownloadClientItem = downloadClientItem,
@@ -336,6 +356,11 @@ namespace NzbDrone.Core.MediaFiles
             var decisions = _importDecisionMaker.GetImportDecisions(new List<IFileInfo>() { fileInfo }, idOverrides, idInfo, idConfig);
 
             return _importApprovedTracks.Import(decisions, true, downloadClientItem, importMode);
+        }
+
+        private static bool TakesTheGrabsVolume(string fileName, Book book, Author author)
+        {
+            return MangaVolumeParser.FileTakesGrabbedVolume(fileName, book.VolumeNumber, EditionLanguages.ReleaseLanguage(author.Metadata?.Value), EditionVolumeTokens.SeriesMatcher(author.Metadata?.Value));
         }
 
         // The grab's book is authoritative: the volume's edition of the FILE's class carries the

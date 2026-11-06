@@ -254,6 +254,13 @@ export const defaultState = {
       isVisible: true
     },
     {
+      // Chapter data (2026-11-06): the chapters a manga volume holds, where the catalogue's list is
+      // confirmed. The series page hides the column when no volume has one (AuthorDetailsSeason).
+      name: 'chapters',
+      label: () => translate('Chapters'),
+      isVisible: true
+    },
+    {
       // The series' score copied onto every volume: hidden by default (series page round,
       // 2026-09-24; migrateBooksRatingColumn hides it once for browsers that saved the columns).
       name: 'rating',

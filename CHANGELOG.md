@@ -3,6 +3,29 @@
 Mangarr's user-facing changes, newest first. Each beta image also carries a build number
 (`10.0.0.N`, shown in System → Status); the release notes on GitHub give both.
 
+## 0.1.0-beta.6
+
+### Volume titles and chapters
+
+- **Manga volumes show their own title.** Where the catalogue has one, a volume reads
+  `Vol. 1: <title>` on the series page and in the Wanted lists, and `<Series>: <title> (Vol. 1)` on
+  its own page. A volume without a title reads `Vol. 1` as before. Titles appear after a series'
+  next refresh.
+- **A volume's chapters.** The series page has a Chapters column ("72–81") and the volume page says
+  "Chapters 72–81". They are shown only where the catalogue's chapter list is confirmed by the
+  volume before or after it. The column hides itself for a series without any.
+
+### Fixes
+
+- **A one-file download with a cut-off file name no longer gets stuck.** When a release of one
+  volume holds one file and its name carries no volume number, Mangarr takes the volume the release
+  named. Manual import proposes that volume too.
+
+### Catalogue
+
+- Chapter lists are read in full (opentome-2026-11-06): English volumes with a confirmed chapter
+  list went from 8,570 to 10,917.
+
 ## 0.1.0-beta.5
 
 ### Fan translations are treated as stand-ins (off by default)

@@ -113,6 +113,28 @@ namespace NzbDrone.Core.Test.MetadataSource
             Subtitles.IsJunk($"Some Arc Name, {token}", "Some Series").Should().BeTrue();
         }
 
+        // Manga volume titles (2026-11-06): Google names some volumes "Volume One" / "volume nine" --
+        // a volume label with its number spelled out. Only as the whole candidate: a number word
+        // inside a real title ("Book One of the Saga") says nothing against it.
+        [TestCase("Volume One")]
+        [TestCase("volume nine")]
+        [TestCase("Book Two")]
+        [TestCase("Vol. Twelve")]
+        [TestCase(" Volume Twenty ")]
+        public void is_junk_rejects_a_spelled_out_volume_label(string candidate)
+        {
+            Subtitles.IsJunk(candidate, "Some Series").Should().BeTrue();
+            Subtitles.Derive(null, candidate, null, "Some Series", null, 1).Should().BeNull();
+        }
+
+        [TestCase("Book One of the Saga")]
+        [TestCase("Volume of Sorrows")]
+        [TestCase("One More Dawn")]
+        public void a_number_word_inside_a_title_is_no_volume_label(string candidate)
+        {
+            Subtitles.IsJunk(candidate, "Some Series").Should().BeFalse();
+        }
+
         [TestCase("(Light Novel)")]
         [TestCase("light novel")]
         [TestCase("LIGHT NOVEL")]

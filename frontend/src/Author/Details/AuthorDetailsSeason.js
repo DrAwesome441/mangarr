@@ -17,11 +17,24 @@ import styles from './AuthorDetailsSeason.css';
 
 // Sonarr on a phone: the secondary columns step aside so the title, the status and the search
 // buttons fit a 390 px screen. Render-time only -- the saved column choice is never changed.
-const SMALL_SCREEN_HIDDEN_COLUMNS = ['series', 'releaseDate', 'pageCount', 'rating', 'indexerFlags'];
+const SMALL_SCREEN_HIDDEN_COLUMNS = ['series', 'releaseDate', 'pageCount', 'chapters', 'rating', 'indexerFlags'];
 
 function hideSecondaryColumns(columns) {
   return columns.map((column) => {
     return SMALL_SCREEN_HIDDEN_COLUMNS.includes(column.name) ? { ...column, isVisible: false } : column;
+  });
+}
+
+// Chapter data (2026-11-06): the Chapters column shows only when a volume of the series has a
+// confirmed chapter list -- never an empty column (a light novel, a series the catalogue lists no
+// chapters for). Render-time only, like the phone rule.
+function hideEmptyChapters(columns, items) {
+  if (items.some((item) => item.chapterFirst != null)) {
+    return columns;
+  }
+
+  return columns.map((column) => {
+    return column.name === 'chapters' ? { ...column, isVisible: false } : column;
   });
 }
 
@@ -93,15 +106,23 @@ class AuthorDetailsSeason extends Component {
   };
 
   // On a phone the table options list the columns as shown (the hidden ones unticked); a save from
-  // there keeps each hidden column's saved choice unless it was ticked on.
+  // there keeps each hidden column's saved choice unless it was ticked on. The same holds for the
+  // Chapters column on a series with no chapter list (hideEmptyChapters), on any screen: a save from
+  // such a series must not hide the column for every other series.
   onTableOptionChange = (payload) => {
     const {
       columns,
+      items,
       isSmallScreen,
       onTableOptionChange
     } = this.props;
 
-    if (!isSmallScreen || !payload.columns) {
+    const hiddenAtRender = [
+      ...(isSmallScreen ? SMALL_SCREEN_HIDDEN_COLUMNS : []),
+      ...(items.some((item) => item.chapterFirst != null) ? [] : ['chapters'])
+    ];
+
+    if (!hiddenAtRender.length || !payload.columns) {
       onTableOptionChange(payload);
       return;
     }
@@ -111,7 +132,7 @@ class AuthorDetailsSeason extends Component {
       columns: payload.columns.map((column) => {
         const saved = columns.find((c) => c.name === column.name);
 
-        return SMALL_SCREEN_HIDDEN_COLUMNS.includes(column.name) && saved ?
+        return hiddenAtRender.includes(column.name) && saved ?
           { ...column, isVisible: column.isVisible || saved.isVisible } :
           column;
       })
@@ -141,7 +162,7 @@ class AuthorDetailsSeason extends Component {
       onMediaTypeSelect
     } = this.props;
 
-    const columns = isSmallScreen ? hideSecondaryColumns(this.props.columns) : this.props.columns;
+    const columns = hideEmptyChapters(isSmallScreen ? hideSecondaryColumns(this.props.columns) : this.props.columns, items);
     const isLightNovel = library === 'lightNovel';
     const {
       bookCount = 0,

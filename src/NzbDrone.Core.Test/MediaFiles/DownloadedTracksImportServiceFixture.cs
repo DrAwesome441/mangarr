@@ -534,6 +534,127 @@ namespace NzbDrone.Core.Test.MediaFiles
             seen.Edition.Should().BeNull();
         }
 
+        // Release-trusted import, manga (2026-11-06): a usenet grab of ONE volume lands as a folder, and
+        // some releases name the file inside with a cut-off scene name that carries no volume number.
+        // Only the grab says which volume it is, so that one file takes the grab's volume, as a
+        // single-file download does. A file that names a volume keeps per-file identification (the
+        // test above), and so does a folder with more than one book file.
+        private static Author SampleMangaAuthor()
+        {
+            return new Author { Id = 5, Name = "Sample Saga", Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" } };
+        }
+
+        [TestCase("xx-sample.saga.volume..pdf")]
+        [TestCase("xxabcde.cbz")]
+        [TestCase("Sample Saga.cbz")]
+        [TestCase("Sample Saga 13.cbz")]
+        [TestCase("Sample.Saga.013.2020.Hybrid.pdf")]
+        public void manga_folder_grab_with_one_file_that_names_no_volume_takes_the_grabs_volume(string fileName)
+        {
+            var author = SampleMangaAuthor();
+            var volume = new Book { Id = 9, VolumeNumber = 13 };
+            var archive = volume.WithEdition(MediaType.Archive, id: 91);
+
+            var folder = @"c:\drop\Publisher-Sample.Saga.Vol.13.Some.Subtitle.2020.Hybrid.Comic.eBook-GRP".AsOsAgnostic();
+            var seen = GivenFolderImportCapturingOverrides(folder, Path.Combine(folder, fileName));
+
+            Subject.ProcessPath(folder, ImportMode.Auto, author, _trackedDownload.DownloadItem, volume);
+
+            seen.Author.Should().BeSameAs(author);
+            seen.Book.Should().BeSameAs(volume);
+            seen.Edition.Should().BeSameAs(archive);
+        }
+
+        // A file that names a volume, however its words are separated, is judged by its own name. The
+        // rule fails closed: any other number in the name (another volume without a token the parser
+        // knows, an obfuscated name with a digit) keeps identification, and a chapter-named file is
+        // never forced onto the grabbed volume, in any market's wording, even when its number is the volume's.
+        [TestCase("Sample_Saga_v14.cbz")]
+        [TestCase("Sample_Saga_Vol_14.cbz")]
+        [TestCase("Sample.Saga.v14.cbz")]
+        [TestCase("Sample.Saga.Vol.14.2020.Hybrid.pdf")]
+        [TestCase("v14.cbz")]
+        [TestCase("Sample Saga 12.cbz")]
+        [TestCase("Sample-Saga-Vol-14.cbz")]
+        [TestCase("Sample Saga Vol#14.cbz")]
+        [TestCase("Sample Saga v14a.cbz")]
+        [TestCase("xx7abc9.cbz")]
+        [TestCase("Sample Saga c012.cbz")]
+        [TestCase("Sample_Saga_Chapter_12.cbz")]
+        [TestCase("Sample_Saga_Chapters_1-12.cbz")]
+        [TestCase("Sample Saga Chapter 13.cbz")]
+        [TestCase("Sample Saga Chapitre 13.cbz")]
+        [TestCase("Sample Saga Kapitel 13.cbz")]
+        [TestCase("Sample Saga 13화.cbz")]
+        [TestCase("Sample Saga １４.cbz")]
+        [TestCase("Sample Saga １３.cbz")]
+        [TestCase("Sample Saga ١٤.cbz")]
+        [TestCase("Sample Saga 99999999999999999999999999999999999999999999.cbz")]
+        public void manga_folder_grab_with_one_file_that_names_a_volume_another_number_or_a_chapter_keeps_per_file_identification(string fileName)
+        {
+            var author = SampleMangaAuthor();
+            var volume = new Book { Id = 9, VolumeNumber = 13 };
+            volume.WithEdition(MediaType.Archive, id: 91);
+
+            var folder = @"c:\drop\Publisher-Sample.Saga.Vol.13.Some.Subtitle.2020.Hybrid.Comic.eBook-GRP".AsOsAgnostic();
+            var seen = GivenFolderImportCapturingOverrides(folder, Path.Combine(folder, fileName));
+
+            Subject.ProcessPath(folder, ImportMode.Auto, author, _trackedDownload.DownloadItem, volume);
+
+            seen.Author.Should().BeSameAs(author);
+            seen.Book.Should().BeNull();
+            seen.Edition.Should().BeNull();
+        }
+
+        [Test]
+        public void manga_folder_grab_of_another_edition_reads_that_editions_volume_word()
+        {
+            var author = SampleMangaAuthor();
+            author.Metadata.Value.EditionLanguage = "fr";
+            var volume = new Book { Id = 9, VolumeNumber = 13 };
+            volume.WithEdition(MediaType.Archive, id: 91);
+
+            var folder = @"c:\drop\Sample.Saga.Tome.13.FRENCH.CBZ-GRP".AsOsAgnostic();
+            var seen = GivenFolderImportCapturingOverrides(folder, Path.Combine(folder, "Sample Saga Tome 14.cbz"));
+
+            Subject.ProcessPath(folder, ImportMode.Auto, author, _trackedDownload.DownloadItem, volume);
+
+            seen.Book.Should().BeNull();
+            seen.Edition.Should().BeNull();
+        }
+
+        [Test]
+        public void manga_folder_grab_with_several_unnamed_files_keeps_per_file_identification()
+        {
+            var author = SampleMangaAuthor();
+            var volume = new Book { Id = 9, VolumeNumber = 13 };
+            volume.WithEdition(MediaType.Archive, id: 91);
+
+            var folder = @"c:\drop\Publisher-Sample.Saga.Vol.13.Some.Subtitle.2020.Hybrid.Comic.eBook-GRP".AsOsAgnostic();
+            var seen = GivenFolderImportCapturingOverrides(folder, Path.Combine(folder, "xx-sample.saga.volume..pdf"), Path.Combine(folder, "xx-sample.saga.extra.pdf"));
+
+            Subject.ProcessPath(folder, ImportMode.Auto, author, _trackedDownload.DownloadItem, volume);
+
+            seen.Author.Should().BeSameAs(author);
+            seen.Book.Should().BeNull();
+            seen.Edition.Should().BeNull();
+        }
+
+        [Test]
+        public void manga_folder_grab_with_one_unnamed_file_and_no_known_volume_keeps_the_author_only()
+        {
+            var author = SampleMangaAuthor();
+
+            var folder = @"c:\drop\Publisher-Sample.Saga.Vol.13.Some.Subtitle.2020.Hybrid.Comic.eBook-GRP".AsOsAgnostic();
+            var seen = GivenFolderImportCapturingOverrides(folder, Path.Combine(folder, "xx-sample.saga.volume..pdf"));
+
+            Subject.ProcessPath(folder, ImportMode.Auto, author, _trackedDownload.DownloadItem);
+
+            seen.Author.Should().BeSameAs(author);
+            seen.Book.Should().BeNull();
+            seen.Edition.Should().BeNull();
+        }
+
         private List<IdentificationOverrides> GivenImportCapturingEveryOverride()
         {
             var seen = new List<IdentificationOverrides>();

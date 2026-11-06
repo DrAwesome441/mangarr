@@ -111,27 +111,84 @@ namespace NzbDrone.Core.Test.BookTests
             LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "Tokyo Ghoul: Days" }).Should().Be("Days");
         }
 
+        // Manga volume titles (2026-11-06, GitHub #3): a manga volume with a title of its own shows it
+        // on the series page row too ("Vol. 1: <this>"), through the same filter; "" (not null) when it
+        // has none, for the same merge reason as a light novel's.
         [Test]
-        public void display_subtitle_of_a_manga_volume_or_without_an_author_is_null()
+        public void display_subtitle_of_a_manga_volume_is_the_shown_subtitle()
         {
             var author = new Author
             {
-                Metadata = new AuthorMetadata { Name = "Berserk", ForeignAuthorId = "local-berserk" }
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" }
             };
 
-            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "The Black Swordsman" }).Should().BeNull();
-            LightNovelTitles.DisplaySubtitleOf(null, new Book { VolumeNumber = 1, Subtitle = "Aincrad" }).Should().BeNull();
+            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "The First Arc" }).Should().Be("The First Arc");
+            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "Sample Saga: The First Arc" }).Should().Be("The First Arc");
+        }
+
+        // A real manga volume title may carry the series' name; a light novel's subtitle may not (that rule
+        // guards calibre and Audiobookshelf against Audible / Google fields, and stays as it was).
+        [Test]
+        public void a_manga_volume_title_may_carry_the_series_name_inside()
+        {
+            var manga = new Author
+            {
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" }
+            };
+            var novel = new Author
+            {
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga~ln" }
+            };
+            var book = new Book { VolumeNumber = 6, Subtitle = "The Sample Saga Corps Gathers" };
+
+            LightNovelTitles.DisplaySubtitleOf(manga, book).Should().Be("The Sample Saga Corps Gathers");
+            LightNovelTitles.DisplayOf(manga, book).Should().Be("Sample Saga: The Sample Saga Corps Gathers (Vol. 6)");
+            LightNovelTitles.DisplaySubtitleOf(novel, book).Should().Be(string.Empty);
+            LightNovelTitles.DisplayOf(novel, book).Should().Be("Sample Saga (Vol. 6)");
         }
 
         [Test]
-        public void display_of_a_manga_volume_is_null()
+        public void display_subtitle_of_a_manga_volume_without_a_title_of_its_own_is_empty_not_null()
         {
             var author = new Author
             {
-                Metadata = new AuthorMetadata { Name = "Berserk", ForeignAuthorId = "local-berserk" }
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" }
             };
 
-            LightNovelTitles.DisplayOf(author, new Book { VolumeNumber = 1 }).Should().BeNull();
+            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1 }).Should().Be(string.Empty);
+            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "Vol. 1" }).Should().Be(string.Empty);
+            LightNovelTitles.DisplaySubtitleOf(author, new Book { VolumeNumber = 1, Subtitle = "Sample Saga" }).Should().Be(string.Empty);
+        }
+
+        [Test]
+        public void display_subtitle_without_an_author_is_null()
+        {
+            LightNovelTitles.DisplaySubtitleOf(null, new Book { VolumeNumber = 1, Subtitle = "Aincrad" }).Should().BeNull();
+        }
+
+        // The volume page: a manga volume with a title of its own reads "<series>: <title> (Vol. N)",
+        // the shape a light novel has; one without keeps its own title ("" -- the page falls back to it).
+        [Test]
+        public void display_of_a_manga_volume_with_a_title_of_its_own_is_the_display_title()
+        {
+            var author = new Author
+            {
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" }
+            };
+
+            LightNovelTitles.DisplayOf(author, new Book { VolumeNumber = 1, Subtitle = "The First Arc" }).Should().Be("Sample Saga: The First Arc (Vol. 1)");
+        }
+
+        [Test]
+        public void display_of_a_manga_volume_without_a_title_of_its_own_is_empty_so_its_own_title_stands()
+        {
+            var author = new Author
+            {
+                Metadata = new AuthorMetadata { Name = "Sample Saga", ForeignAuthorId = "local-sample-saga" }
+            };
+
+            LightNovelTitles.DisplayOf(author, new Book { VolumeNumber = 1 }).Should().Be(string.Empty);
+            LightNovelTitles.DisplayOf(author, new Book { VolumeNumber = 1, Subtitle = "Vol. 1" }).Should().Be(string.Empty);
         }
 
         [Test]

@@ -139,12 +139,13 @@ namespace NzbDrone.Core.MediaFiles.BookImport.Manual
         private List<ManualImportItem> ProcessFolder(string folder, string downloadId, Author author, FilterFilesType filter, bool replaceExistingFiles)
         {
             DownloadClientItem downloadClientItem = null;
+            TrackedDownload trackedDownload = null;
             var directoryInfo = new DirectoryInfo(folder);
             author = author ?? _parsingService.GetAuthor(directoryInfo.Name);
 
             if (downloadId.IsNotNullOrWhiteSpace())
             {
-                var trackedDownload = _trackedDownloadService.Find(downloadId);
+                trackedDownload = _trackedDownloadService.Find(downloadId);
                 downloadClientItem = trackedDownload?.DownloadItem;
 
                 if (author == null)
@@ -158,6 +159,26 @@ namespace NzbDrone.Core.MediaFiles.BookImport.Manual
             {
                 Author = author
             };
+
+            // Manual import of a tracked grab (2026-11-06): a one-volume manga grab whose one file does not
+            // say which volume it is ("xx-sample.series.volume..pdf") is proposed as the grabbed volume, by
+            // the automatic import's own rule (MangaVolumeParser.FileTakesGrabbedVolume). Without it the file
+            // was scored against the volumes already in the library and offered as one of those ("Vol. 1"
+            // for a grab of Vol. 16) with no rejection, so accepting the defaults filed it under the wrong number.
+            var grabbed = trackedDownload?.RemoteBook?.Books;
+
+            if (author != null && author.Library != LibraryType.LightNovel && grabbed?.Count == 1 && authorFiles.Count == 1 &&
+                MangaVolumeParser.FileTakesGrabbedVolume(authorFiles[0].Name, grabbed[0].VolumeNumber, EditionLanguages.ReleaseLanguage(author.Metadata?.Value), EditionVolumeTokens.SeriesMatcher(author.Metadata?.Value)))
+            {
+                var edition = grabbed[0].EditionOf(MediaTypes.OfFile(authorFiles[0].Extension, author.Library));
+
+                if (edition != null)
+                {
+                    idOverrides.Book = grabbed[0];
+                    idOverrides.Edition = edition;
+                }
+            }
+
             var itemInfo = new ImportDecisionMakerInfo
             {
                 DownloadClientItem = downloadClientItem,

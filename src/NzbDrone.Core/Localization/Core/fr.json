@@ -2760,5 +2760,8 @@
     "ServerProgressPdfOriginalsFolderUnusable": "PDF originals folder is not usable (check that it exists, is writable and is empty or already a Mangarr PDF originals folder); nothing was converted",
     "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries",
     "FanTranslation": "Traduction de fans",
-    "FanTranslationChapters": "Traduction de fans, chapitres {first}–{last}"
+    "FanTranslationChapters": "Traduction de fans, chapitres {first}–{last}",
+    "ChapterSingle": "Chapitre {chapter}",
+    "Chapters": "Chapitres",
+    "ChaptersRange": "Chapitres {first}–{last}"
 }

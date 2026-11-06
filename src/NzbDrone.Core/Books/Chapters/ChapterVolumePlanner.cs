@@ -182,6 +182,33 @@ namespace NzbDrone.Core.Books.Chapters
             return result;
         }
 
+        // Chapter data (2026-11-06): what the interface may show -- the chapters of every volume whose
+        // list the builder itself would use: no whole chapter shared with another volume, and adjoining a
+        // listed neighbour (Overlapping, Unadjoined). First / Last are the lowest and highest chapter the
+        // list holds, a listed half chapter included. books = every volume of ONE series: a neighbour
+        // that is not passed in can neither confirm nor contradict.
+        public static Dictionary<int, (double First, double Last)> TrustedSpans(IEnumerable<Book> books, MediaType mediaType)
+        {
+            var bookList = books.ToList();
+            var untrusted = Overlapping(bookList, mediaType);
+            untrusted.UnionWith(Unadjoined(bookList, mediaType));
+            var result = new Dictionary<int, (double First, double Last)>();
+
+            foreach (var book in bookList)
+            {
+                var listed = book.EditionOf(mediaType)?.Chapters;
+
+                if (listed == null || !listed.Any(IsWhole) || untrusted.Contains(book.Id))
+                {
+                    continue;
+                }
+
+                result[book.Id] = (listed.Min(), listed.Max());
+            }
+
+            return result;
+        }
+
         public static bool IsEnabled(Author author, IConfigService config)
         {
             return author != null &&

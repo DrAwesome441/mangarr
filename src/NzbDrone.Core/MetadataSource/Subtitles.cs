@@ -43,6 +43,11 @@ namespace NzbDrone.Core.MetadataSource
         private static readonly Regex VolumeNumberToken = new Regex(@"\b(?:vol|volume|book)\.?\s*\d+|\bv\.?\s*\d+|#\s*\d+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex LightNovelToken = new Regex(@"light\s*novel", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        // Manga volume titles (2026-11-06): "Volume One", "volume nine", "Book Two" -- a volume label with
+        // its number spelled out, as Google names some volumes. Only as the WHOLE candidate: a number
+        // word inside a real title ("Book One of the Saga") is not a label.
+        private static readonly Regex SpelledVolumeLabel = new Regex(@"^\s*(?:vol\.?|volume|book)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         // Full-title subtitles (2026-09-24, the maintainer: "Rascal Does Not Dream have subtitles that should be
         // present in Mangarr for LN's too"): words after the series name that say nothing about THIS
         // volume -- a bare number ("Sword Art Online Progressive 2") or an edition/generic word -- do
@@ -90,7 +95,7 @@ namespace NzbDrone.Core.MetadataSource
         // subtitle, not the series naming itself. An Audible/Google candidate keeps the gate.
         //
         // editionLanguage (Preferred Edition, 2026-09-24): the series' edition; null/"en" is today's filter.
-        public static string Derive(string title, string subtitle, string seriesBookTitle, string seriesName, IEnumerable<string> aliases, double volumeNumber, bool trustedArtifactCandidate = false, string editionLanguage = null)
+        public static string Derive(string title, string subtitle, string seriesBookTitle, string seriesName, IEnumerable<string> aliases, double volumeNumber, bool trustedArtifactCandidate = false, string editionLanguage = null, bool allowSeriesInside = false)
         {
             var candidate = subtitle;
 
@@ -116,7 +121,7 @@ namespace NzbDrone.Core.MetadataSource
             var stripped = TrailingEditionTag.Replace(candidate, string.Empty).Trim();
             candidate = trustedArtifactCandidate ? WithoutSeriesPrefix(stripped, seriesName) : stripped;
 
-            if (candidate.Length < 3 || VolumeLabel.IsMatch(candidate) || NamesSeries(candidate, seriesName, aliases, trustedArtifactCandidate) || IsJunk(candidate, seriesName, allowFullTitle: trustedArtifactCandidate, editionLanguage: editionLanguage))
+            if (candidate.Length < 3 || VolumeLabel.IsMatch(candidate) || NamesSeries(candidate, seriesName, aliases, trustedArtifactCandidate) || IsJunk(candidate, seriesName, allowFullTitle: trustedArtifactCandidate, editionLanguage: editionLanguage, allowSeriesInside: allowSeriesInside))
             {
                 return null;
             }
@@ -138,14 +143,19 @@ namespace NzbDrone.Core.MetadataSource
         //
         // editionLanguage (Preferred Edition, 2026-09-24): a non-English edition's own volume labels and
         // edition words are junk too (EditionJunk); null/"en" is today's filter, byte for byte.
-        public static bool IsJunk(string candidate, string seriesName, bool allowFullTitle = true, string editionLanguage = null)
+        //
+        // allowSeriesInside (manga volume titles, 2026-11-06): a manga volume's title comes from the catalogue
+        // only, and a real one often carries the series' name ("Go Get 'Em, <Series>", "The <Series> Corps
+        // Gathers"). The name-anywhere rule below exists for Audible / Google fields, so it is skipped for
+        // those titles; every other rule still runs, and the name on its own is NamesSeries' to reject.
+        public static bool IsJunk(string candidate, string seriesName, bool allowFullTitle = true, string editionLanguage = null, bool allowSeriesInside = false)
         {
             if (candidate.IsNullOrWhiteSpace())
             {
                 return true;
             }
 
-            if (VolumeNumberToken.IsMatch(candidate) || LightNovelToken.IsMatch(candidate))
+            if (VolumeNumberToken.IsMatch(candidate) || LightNovelToken.IsMatch(candidate) || SpelledVolumeLabel.IsMatch(candidate))
             {
                 return true;
             }
@@ -158,6 +168,11 @@ namespace NzbDrone.Core.MetadataSource
             if (seriesName.IsNullOrWhiteSpace())
             {
                 return false;
+            }
+
+            if (allowSeriesInside)
+            {
+                return TitleMatcher.Normalize(candidate) == TitleMatcher.Normalize(seriesName);
             }
 
             // Full-title subtitles (2026-09-24): Yen Press names Rascal's volumes "Rascal Does Not

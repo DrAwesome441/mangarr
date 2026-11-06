@@ -304,5 +304,61 @@ namespace NzbDrone.Core.Test.BookTests.Chapters
 
             ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEquivalentTo(new[] { 1, 5 });
         }
+
+        // Chapter data (2026-11-06): the interface shows a volume's chapters only where the builder
+        // would use the list.
+        [Test]
+        public void trusted_spans_are_the_first_and_last_chapter_of_every_adjoining_volume()
+        {
+            var spans = ChapterVolumePlanner.TrustedSpans(Series(), MediaType.Archive);
+
+            spans.Keys.Should().BeEquivalentTo(Layout.Select(v => v.Volume));
+            spans[1].Should().Be((1d, 6d));
+            spans[9].Should().Be((72d, 81d));
+        }
+
+        [Test]
+        public void trusted_spans_leave_out_first_chapter_only_lists()
+        {
+            var books = Layout.Select(v => Volume(v.Volume, new List<double> { v.First })).ToList();
+
+            ChapterVolumePlanner.TrustedSpans(books, MediaType.Archive).Should().BeEmpty();
+        }
+
+        [Test]
+        public void trusted_spans_leave_out_a_lone_listed_volume_and_overlapping_ones()
+        {
+            ChapterVolumePlanner.TrustedSpans(new List<Book> { Volume(1, Range(1, 6)), Volume(2, null) }, MediaType.Archive).Should().BeEmpty();
+
+            var overlapping = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(7, 12)), Volume(3, Range(13, 19)) };
+
+            ChapterVolumePlanner.TrustedSpans(overlapping, MediaType.Archive).Should().BeEmpty();
+        }
+
+        [Test]
+        public void trusted_spans_include_a_listed_half_chapter()
+        {
+            var first = Range(1, 6);
+            first.Add(6.5);
+            var books = new List<Book> { Volume(1, first), Volume(2, Range(7, 12)) };
+
+            var spans = ChapterVolumePlanner.TrustedSpans(books, MediaType.Archive);
+
+            spans[1].Should().Be((1d, 6.5d));
+            spans[2].Should().Be((7d, 12d));
+        }
+
+        [Test]
+        public void trusted_spans_read_only_the_edition_of_the_media_type_and_skip_a_list_of_halves()
+        {
+            var books = new List<Book>
+            {
+                Volume(1, Range(1, 6), MediaType.Ebook),
+                Volume(2, Range(7, 12), MediaType.Ebook),
+                Volume(3, new List<double> { 12.5 })
+            };
+
+            ChapterVolumePlanner.TrustedSpans(books, MediaType.Archive).Should().BeEmpty();
+        }
     }
 }

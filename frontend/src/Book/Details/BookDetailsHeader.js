@@ -66,6 +66,8 @@ class BookDetailsHeader extends Component {
       displayTitle,
       seriesTitle,
       pageCount,
+      chapterFirst,
+      chapterLast,
       overview,
       statistics = {},
       monitored,
@@ -123,6 +125,16 @@ class BookDetailsHeader extends Component {
       durationText = runtime;
     } else if (pageCount) {
       durationText = translate('CountPages', { count: pageCount });
+    }
+
+    // Chapter data (2026-11-06): the chapters a manga volume holds, where the catalogue's list is
+    // confirmed ("Chapters 72–81", "Chapter 5").
+    let chaptersText = null;
+
+    if (!audioTab && chapterFirst != null) {
+      chaptersText = chapterLast == null || chapterLast === chapterFirst ?
+        translate('ChapterSingle', { chapter: chapterFirst }) :
+        translate('ChaptersRange', { first: chapterFirst, last: chapterLast });
     }
     // Series page round (2026-09-24): "Downloading N%" or the import state while the volume (the
     // selected edition, on a light novel) has a download that will fill it.
@@ -200,6 +212,14 @@ class BookDetailsHeader extends Component {
                   durationText ?
                     <span className={styles.duration}>
                       {durationText}
+                    </span> :
+                    null
+                }
+
+                {
+                  chaptersText ?
+                    <span className={styles.duration}>
+                      {chaptersText}
                     </span> :
                     null
                 }
@@ -332,6 +352,8 @@ BookDetailsHeader.propTypes = {
   displayTitle: PropTypes.string,
   seriesTitle: PropTypes.string.isRequired,
   pageCount: PropTypes.number,
+  chapterFirst: PropTypes.number,
+  chapterLast: PropTypes.number,
   overview: PropTypes.string,
   statistics: PropTypes.object.isRequired,
   releaseDate: PropTypes.string.isRequired,
