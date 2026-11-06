@@ -62,15 +62,29 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
             return ProfileComparisonResult.Upgrade;
         }
 
-        // A volume built from chapter packs is a stand-in: any real volume replaces it, whatever the
-        // profile's upgrade/cutoff settings say. CbzChapters over CbzChapters is not a replacement, and
-        // neither is an Unknown quality (not known to be a real volume).
-        public static bool ReplacesChapterBuilt(QualityModel existing, QualityModel incoming)
+        // Stand-ins (2026-11-05): a volume built from chapter packs (CbzChapters) and a fan translation
+        // (CbzFanTranslation) are both placeholders for the official volume.
+        public static bool IsStandIn(QualityModel quality)
         {
-            return existing?.Quality == Quality.CbzChapters &&
-                   incoming != null &&
-                   incoming.Quality != Quality.CbzChapters &&
-                   incoming.Quality != Quality.Unknown;
+            return quality?.Quality == Quality.CbzChapters || quality?.Quality == Quality.CbzFanTranslation;
+        }
+
+        // Any official volume replaces a stand-in whatever the profile's upgrade/cutoff settings say, and a
+        // chapter-built volume replaces a fan translation. A fan translation replaces nothing, the same
+        // stand-in over itself is no replacement, and neither is an Unknown quality (not known to be official).
+        public static bool ReplacesStandIn(QualityModel existing, QualityModel incoming)
+        {
+            if (incoming == null || incoming.Quality == Quality.Unknown || incoming.Quality == Quality.CbzFanTranslation)
+            {
+                return false;
+            }
+
+            if (existing?.Quality == Quality.CbzChapters)
+            {
+                return incoming.Quality != Quality.CbzChapters;
+            }
+
+            return existing?.Quality == Quality.CbzFanTranslation;
         }
 
         public bool IsUpgradable(QualityProfile qualityProfile, QualityModel currentQualities, List<CustomFormat> currentCustomFormats, QualityModel newQuality, List<CustomFormat> newCustomFormats)
@@ -107,6 +121,12 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
         public bool QualityCutoffNotMet(QualityProfile profile, QualityModel currentQuality, QualityModel newQuality = null)
         {
+            // A fan translation never meets a cutoff: an official copy is always wanted (2026-11-05).
+            if (currentQuality?.Quality == Quality.CbzFanTranslation)
+            {
+                return true;
+            }
+
             var cutoff = profile.UpgradeAllowed ? profile.Cutoff : profile.FirstAllowedQuality().Id;
             var cutoffCompare = new QualityModelComparer(profile).Compare(currentQuality.Quality.Id, cutoff);
 

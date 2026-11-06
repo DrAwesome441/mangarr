@@ -60,6 +60,13 @@ namespace NzbDrone.Core.DecisionEngine.Specifications.RssSync
                         continue;
                     }
 
+                    // Fan translations (2026-11-05): a recent fan grab never blocks an official release.
+                    if (mostRecent.Quality?.Quality == Quality.CbzFanTranslation &&
+                        UpgradableSpecification.ReplacesStandIn(mostRecent.Quality, subject.ParsedBookInfo.Quality))
+                    {
+                        continue;
+                    }
+
                     var customFormats = _formatService.ParseCustomFormat(mostRecent, subject.Author);
 
                     // The series will be the same as the one in history since it's the same episode.

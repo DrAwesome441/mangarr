@@ -7,6 +7,7 @@ using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MediaFiles.Chapters;
 using NzbDrone.Core.Parser;
@@ -82,10 +83,11 @@ namespace NzbDrone.Core.Extras.Metadata.ComicInfo
             return result.Status;
         }
 
-        // A volume built from chapters has no printed page count: its pages are the images in the archive.
+        // A volume built from chapters (or a fan translation, 2026-11-05) has no printed page count: its
+        // pages are the images in the archive.
         private static int? BuiltPageCount(BookFile file)
         {
-            if (file.Quality?.Quality?.Id != Quality.CbzChapters.Id)
+            if (!UpgradableSpecification.IsStandIn(file.Quality))
             {
                 return null;
             }

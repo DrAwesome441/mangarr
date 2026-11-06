@@ -227,6 +227,39 @@ namespace NzbDrone.Core.Test.MediaFiles.BookImport
             result.Single().Item.Quality.Quality.Should().Be(Quality.CbzChapters);
         }
 
+        // Fan translations (2026-11-05): the renamed library file no longer says "(Fan translation"; its tracked
+        // grade stands through a rescan and through identification, as a built volume's does.
+        [Test]
+        public void a_rescanned_fan_translation_keeps_its_tracked_grade()
+        {
+            GivenTrackedFile(Quality.CbzFanTranslation, Quality.CBZ);
+
+            var result = Subject.GetImportDecisions(_fileInfos, _idOverrides, null, _idConfig);
+
+            result.Single().Item.Quality.Quality.Should().Be(Quality.CbzFanTranslation);
+        }
+
+        [Test]
+        public void a_fan_translation_grade_stands_after_identification()
+        {
+            GivenTrackedFile(Quality.CbzFanTranslation, Quality.CBZ);
+
+            Mocker.GetMock<IIdentificationService>()
+                .Setup(s => s.Identify(It.IsAny<List<LocalBook>>(), It.IsAny<IdentificationOverrides>(), It.IsAny<ImportDecisionMakerConfig>()))
+                .Returns((List<LocalBook> tracks, IdentificationOverrides idOverrides, ImportDecisionMakerConfig config) =>
+                {
+                    tracks.ForEach(t => t.Quality = new QualityModel(Quality.CBZ));
+
+                    var ret = new LocalEdition(tracks);
+                    ret.Edition = _edition;
+                    return new List<LocalEdition> { ret };
+                });
+
+            var result = Subject.GetImportDecisions(_fileInfos, _idOverrides, null, _idConfig);
+
+            result.Single().Item.Quality.Quality.Should().Be(Quality.CbzFanTranslation);
+        }
+
         [Test]
         public void a_path_tracked_with_mixed_grades_is_graded_as_before()
         {

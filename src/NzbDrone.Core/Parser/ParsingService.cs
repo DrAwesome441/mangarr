@@ -163,9 +163,12 @@ namespace NzbDrone.Core.Parser
                 return true;
             }
 
+            // Fan translations (2026-11-05): a fan release is a manga volume and keeps its grade, which no
+            // light-novel edition takes; read as an EPUB it would skip every fan rule (opt-in, wait, never replaces).
             if (author?.Library != LibraryType.LightNovel ||
                 quality == null ||
                 quality == Quality.Unknown ||
+                quality == Quality.CbzFanTranslation ||
                 MediaTypes.OfQuality(quality) != MediaType.Archive ||
                 QualityParser.HasExplicitArchiveToken(title) ||
                 QualityParser.LooksLikeManga(title) ||
@@ -382,11 +385,15 @@ namespace NzbDrone.Core.Parser
 
             var planned = ChapterVolumePlanner.Plan(ChapterVolumePlanner.Available(range.Start, range.End), books, mediaType);
 
-            // Only volumes still missing: a volume whose archive edition has any file (a chapter-built
+            // Only volumes still missing: a volume whose archive edition has a file (a chapter-built
             // CBZ (chapters) copy included) is not one this release is for, and leaving it in would let
-            // the owned volumes' files reject the whole release. Unmonitored volumes (or an unmonitored
-            // archive edition) are not wanted either; the release maps to the monitored ones it completes.
-            var owned = _mediaFileService.GetFilesByAuthor(author.Id).Select(f => f.EditionId).ToHashSet();
+            // the owned volumes' files reject the whole release. A fan translation does not make a volume
+            // owned (2026-11-05): an official chapter release replaces it. Unmonitored volumes (or an
+            // unmonitored archive edition) are not wanted either; the release maps to the monitored ones it completes.
+            var owned = _mediaFileService.GetFilesByAuthor(author.Id)
+                .Where(f => f.Quality?.Quality != Quality.CbzFanTranslation)
+                .Select(f => f.EditionId)
+                .ToHashSet();
             var missing = planned
                 .Where(p => p.Book.Monitored && p.Book.EditionOf(mediaType).Monitored)
                 .Where(p => !owned.Contains(p.Book.EditionOf(mediaType).Id))

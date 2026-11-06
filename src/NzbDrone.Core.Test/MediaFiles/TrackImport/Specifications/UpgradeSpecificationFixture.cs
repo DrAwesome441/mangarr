@@ -367,5 +367,73 @@ namespace NzbDrone.Core.Test.MediaFiles.BookImport.Specifications
         {
             Subject.IsSatisfiedBy(GivenMangaImport(Quality.CbzChapters, Quality.CbzChapters), null).Accepted.Should().BeTrue();
         }
+
+        // Fan translations (2026-11-05): upgrades off, the fan quality ranked ABOVE CBZ, so the quality
+        // compare alone would let a fan copy in and refuse the official one.
+        private static LocalBook GivenFanProfileImport(Quality onDisk, Quality incoming)
+        {
+            var profile = new QualityProfile
+            {
+                UpgradeAllowed = false,
+                Cutoff = Quality.CbzFanTranslation.Id,
+                Items = new List<QualityProfileQualityItem>
+                {
+                    new QualityProfileQualityItem { Quality = Quality.CbzChapters, Allowed = true },
+                    new QualityProfileQualityItem { Quality = Quality.CBZ, Allowed = true },
+                    new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true }
+                }
+            };
+
+            var author = new Author { QualityProfile = profile };
+            var edition = new Edition
+            {
+                MediaType = MediaType.Archive,
+                BookFiles = new List<BookFile> { new BookFile { Quality = new QualityModel(onDisk) } }
+            };
+
+            return new LocalBook { Path = "/manga/Sample Series/Vol 003.cbz", Author = author, Edition = edition, Quality = new QualityModel(incoming) };
+        }
+
+        [Test]
+        public void an_imported_fan_translation_never_replaces_a_file()
+        {
+            Subject.IsSatisfiedBy(GivenFanProfileImport(Quality.CBZ, Quality.CbzFanTranslation), null).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void a_rescanned_fan_translation_at_its_own_path_is_accepted()
+        {
+            var localBook = GivenFanProfileImport(Quality.CbzFanTranslation, Quality.CbzFanTranslation);
+            localBook.Edition.BookFiles.Value[0].Path = localBook.Path;
+
+            Subject.IsSatisfiedBy(localBook, null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_fan_translation_at_another_path_is_rejected_while_the_edition_holds_a_file()
+        {
+            var localBook = GivenFanProfileImport(Quality.CbzFanTranslation, Quality.CbzFanTranslation);
+            localBook.Edition.BookFiles.Value[0].Path = "/manga/Sample Series/Vol 003 (Fan translation).cbz";
+
+            Subject.IsSatisfiedBy(localBook, null).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void an_imported_fan_translation_does_not_replace_another_fan_translation()
+        {
+            Subject.IsSatisfiedBy(GivenFanProfileImport(Quality.CbzFanTranslation, Quality.CbzFanTranslation), null).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void an_official_import_replaces_a_fan_translation()
+        {
+            Subject.IsSatisfiedBy(GivenFanProfileImport(Quality.CbzFanTranslation, Quality.CBZ), null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_chapter_built_import_replaces_a_fan_translation()
+        {
+            Subject.IsSatisfiedBy(GivenFanProfileImport(Quality.CbzFanTranslation, Quality.CbzChapters), null).Accepted.Should().BeTrue();
+        }
     }
 }

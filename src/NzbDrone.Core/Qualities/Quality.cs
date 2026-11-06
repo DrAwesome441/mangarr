@@ -105,11 +105,18 @@ namespace NzbDrone.Core.Qualities
         public static Quality M4B => new Quality(12, "M4B");
         public static Quality UnknownAudio => new Quality(13, "Unknown Audio");
 
+        // Fan translations (2026-11-05): a volume from a fan-translation release. Id 14 was the next
+        // free id. Migration 064 adds it as the lowest item of every profile's order (a new default
+        // profile lists it after Unknown), unticked until the user opts in; its Weight only orders the
+        // settings page. Any official copy replaces it whatever the order (UpgradableSpecification.ReplacesStandIn).
+        public static Quality CbzFanTranslation => new Quality(14, "CBZ (fan translation)");
+
         static Quality()
         {
             All = new List<Quality>
             {
                 Unknown,
+                CbzFanTranslation,
                 PDF,
                 CBZ,
                 CbzChapters,
@@ -141,6 +148,7 @@ namespace NzbDrone.Core.Qualities
             DefaultQualityDefinitions = new HashSet<QualityDefinition>
             {
                 new QualityDefinition(Quality.Unknown)      { Weight = 1, MinSize = 0, MaxSize = null, GroupWeight = 1 },
+                new QualityDefinition(Quality.CbzFanTranslation) { Weight = 2, MinSize = 0, MaxSize = null, GroupWeight = 2 },
                 new QualityDefinition(Quality.CbzChapters)  { Weight = 4, MinSize = 0, MaxSize = null, GroupWeight = 4 },
                 new QualityDefinition(Quality.PDF)          { Weight = 5, MinSize = 0, MaxSize = null, GroupWeight = 5 },
                 new QualityDefinition(Quality.RAR)          { Weight = 8, MinSize = 0, MaxSize = null, GroupWeight = 8 },

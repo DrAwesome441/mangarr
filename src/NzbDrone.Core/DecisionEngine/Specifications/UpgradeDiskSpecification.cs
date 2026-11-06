@@ -38,7 +38,7 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
                     return Decision.Accept();
                 }
 
-                if (UpgradableSpecification.ReplacesChapterBuilt(file.Quality, subject.ParsedBookInfo.Quality))
+                if (UpgradableSpecification.ReplacesStandIn(file.Quality, subject.ParsedBookInfo.Quality))
                 {
                     continue;
                 }

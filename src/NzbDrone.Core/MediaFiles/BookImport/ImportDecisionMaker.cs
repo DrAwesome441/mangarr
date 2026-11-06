@@ -9,6 +9,7 @@ using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Common.Localization;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.MediaFiles.BookImport.Aggregation;
 using NzbDrone.Core.MediaFiles.BookImport.Identification;
@@ -97,7 +98,7 @@ namespace NzbDrone.Core.MediaFiles.BookImport
                 return Tuple.Create(localTracks, decisions);
             }
 
-            var builtFromChapters = BuiltFromChapters(files, filter);
+            var trackedStandInGrades = TrackedStandInGrades(files, filter);
 
             ParsedBookInfo downloadClientItemInfo = null;
 
@@ -130,7 +131,7 @@ namespace NzbDrone.Core.MediaFiles.BookImport
                     // TODO fix otherfiles?
                     _augmentingService.Augment(localTrack, true);
 
-                    if (builtFromChapters.TryGetValue(localTrack.Path, out var tracked))
+                    if (trackedStandInGrades.TryGetValue(localTrack.Path, out var tracked))
                     {
                         localTrack.Quality = tracked;
                     }
@@ -157,8 +158,9 @@ namespace NzbDrone.Core.MediaFiles.BookImport
         // Volumes built from chapter packs (2026-10-21): a rescan (a filtered pass over the library) re-reads a
         // tracked file once its size or time moved -- ComicInfo written into it after import does both -- and
         // grades it from its name. A built volume's library name no longer says "(Built from chapters", so its
-        // tracked CBZ (chapters) grade stands; any other tracked file is graded as before.
-        private Dictionary<string, QualityModel> BuiltFromChapters(List<IFileInfo> files, FilterFilesType filter)
+        // tracked CBZ (chapters) grade stands; likewise a fan translation's (2026-11-05) tracked CBZ (fan
+        // translation) grade once its name no longer says "(Fan translation". Any other tracked file is graded as before.
+        private Dictionary<string, QualityModel> TrackedStandInGrades(List<IFileInfo> files, FilterFilesType filter)
         {
             if (filter == FilterFilesType.None)
             {
@@ -169,7 +171,7 @@ namespace NzbDrone.Core.MediaFiles.BookImport
             // the name, as before.
             return (_mediaFileService.GetFileWithPath(files.Select(f => f.FullName).ToList()) ?? new List<BookFile>())
                 .GroupBy(f => f.Path, PathEqualityComparer.Instance)
-                .Where(g => g.All(f => f.Quality?.Quality == Quality.CbzChapters))
+                .Where(g => UpgradableSpecification.IsStandIn(g.First().Quality) && g.All(f => f.Quality?.Quality == g.First().Quality.Quality))
                 .ToDictionary(g => g.Key, g => g.First().Quality, PathEqualityComparer.Instance);
         }
 
@@ -188,9 +190,10 @@ namespace NzbDrone.Core.MediaFiles.BookImport
             // (IdentificationService.ToLocalTrack), grading a rescanned built volume from its library name once
             // more -- live, the first refresh after import had turned every built volume into plain CBZ, so the
             // official volume no longer counted as an upgrade. A CBZ (chapters) grade decided above (the tracked
-            // grade on a rescan, the built file's own name on a new download) stands after identification.
-            var chapterGrades = localTracks
-                .Where(x => x.Quality?.Quality == Quality.CbzChapters)
+            // grade on a rescan, the built file's own name on a new download) stands after identification; so
+            // does a CBZ (fan translation) grade (2026-11-05).
+            var standInGrades = localTracks
+                .Where(x => UpgradableSpecification.IsStandIn(x.Quality))
                 .ToDictionary(x => x.Path, x => x.Quality, PathEqualityComparer.Instance);
 
             var releases = _identificationService.Identify(localTracks, idOverrides, config);
@@ -207,9 +210,9 @@ namespace NzbDrone.Core.MediaFiles.BookImport
                 // light novel's PDF becomes Ebook PDF before any spec -- release or file -- reads it.
                 foreach (var localTrack in release.LocalBooks)
                 {
-                    if (chapterGrades.TryGetValue(localTrack.Path, out var chapterGrade))
+                    if (standInGrades.TryGetValue(localTrack.Path, out var standInGrade))
                     {
-                        localTrack.Quality = chapterGrade;
+                        localTrack.Quality = standInGrade;
                     }
 
                     MediaTypes.RegradePdfForLibrary(localTrack.Quality, localTrack.Path, localTrack.Author?.Library);

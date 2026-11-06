@@ -215,6 +215,31 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
             ParsingService.ResolveMediaType(parsed, LightNovel(), null).Should().Be(MediaType.Archive);
         }
 
+        // Fan translations (2026-11-05): a fan release is a manga volume. A light-novel author keeps the fan
+        // grade (Archive, which no light-novel edition takes) instead of reading it as an EPUB or audiobook,
+        // which would skip every fan rule. The queue path passes no search criteria.
+        [Test]
+        public void fan_translation_keeps_its_grade_for_a_light_novel_author()
+        {
+            const string title = "Sample Series v05 (Fan translation) (MangaDex)";
+            var parsed = new ParsedBookInfo { ReleaseTitle = title, Quality = QualityParser.ParseQuality(title) };
+            parsed.Quality.Quality.Should().Be(Quality.CbzFanTranslation, "the fan grade is the input under test");
+
+            ParsingService.RegradeForLibrary(parsed, title, LightNovel(), null, null).Should().BeFalse();
+            parsed.Quality.Quality.Should().Be(Quality.CbzFanTranslation);
+            ParsingService.ResolveMediaType(parsed, LightNovel(), null).Should().Be(MediaType.Archive);
+
+            var ebookSearch = new BookSearchCriteria { MediaType = MediaType.Ebook };
+            ParsingService.RegradeForLibrary(parsed, title, LightNovel(), ebookSearch, new List<int> { 7020 }).Should().BeFalse();
+            parsed.Quality.Quality.Should().Be(Quality.CbzFanTranslation);
+            ParsingService.ResolveMediaType(parsed, LightNovel(), ebookSearch).Should().Be(MediaType.Archive);
+
+            var audioSearch = new AuthorSearchCriteria { MediaType = MediaType.Audio };
+            ParsingService.RegradeForLibrary(parsed, title, LightNovel(), audioSearch, null).Should().BeFalse();
+            parsed.Quality.Quality.Should().Be(Quality.CbzFanTranslation);
+            ParsingService.ResolveMediaType(parsed, LightNovel(), audioSearch).Should().Be(MediaType.Archive);
+        }
+
         // An epub group's square-bracketed tag beside "(Digital)", or no "(Digital)" at all (a private tracker /
         // usenet names), regrades to EPUB as before. (LN wording such as "(Yen On)" is EPUB at parse
         // time already and never reaches the regrade.)

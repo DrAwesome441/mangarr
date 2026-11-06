@@ -59,14 +59,16 @@ namespace NzbDrone.Core.MediaFiles.Chapters
 
         private readonly IDiskProvider _diskProvider;
         private readonly IEditionService _editionService;
+        private readonly IBookService _bookService;
         private readonly IMapCoversToLocal _mediaCoverService;
         private readonly ILocalizationService _localizationService;
         private readonly Logger _logger;
 
-        public ChapterVolumeAssembler(IDiskProvider diskProvider, IEditionService editionService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, Logger logger)
+        public ChapterVolumeAssembler(IDiskProvider diskProvider, IEditionService editionService, IBookService bookService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, Logger logger)
         {
             _diskProvider = diskProvider;
             _editionService = editionService;
+            _bookService = bookService;
             _mediaCoverService = mediaCoverService;
             _localizationService = localizationService;
             _logger = logger;
@@ -88,11 +90,15 @@ namespace NzbDrone.Core.MediaFiles.Chapters
                 .Select(b => new Book { Id = b.Id, VolumeNumber = b.VolumeNumber, Editions = editions.Where(e => e.BookId == b.Id).ToList() })
                 .ToList();
 
-            // The series' other volumes take part in planning only so an overlap with them is seen.
+            // The series' other volumes take part in planning only so an overlap with them is seen, and
+            // their volume numbers so a neighbour's list can back (or contradict) a mapped volume's (2026-11-05).
+            var volumeNumbers = (_bookService.GetBooksByAuthor(author.Id) ?? new List<Book>())
+                .GroupBy(b => b.Id)
+                .ToDictionary(g => g.Key, g => g.First().VolumeNumber);
             var others = editions
                 .Where(e => !bookIds.Contains(e.BookId))
                 .GroupBy(e => e.BookId)
-                .Select(g => new Book { Id = g.Key, Editions = g.ToList() });
+                .Select(g => new Book { Id = g.Key, VolumeNumber = volumeNumbers.TryGetValue(g.Key, out var number) ? number : 0, Editions = g.ToList() });
 
             var files = ChapterFiles(downloadPath, language);
             var listedHere = HalvesOf(editions.Where(e => bookIds.Contains(e.BookId)));
@@ -102,6 +108,7 @@ namespace NzbDrone.Core.MediaFiles.Chapters
             var series = copies.Concat(others).ToList();
             var planned = ChapterVolumePlanner.Plan(available, series, mediaType);
             var overlapping = ChapterVolumePlanner.Overlapping(series, mediaType);
+            var unadjoined = ChapterVolumePlanner.Unadjoined(series, mediaType);
 
             foreach (var book in copies.OrderBy(b => b.VolumeNumber))
             {
@@ -111,6 +118,12 @@ namespace NzbDrone.Core.MediaFiles.Chapters
                 if (overlapping.Contains(book.Id))
                 {
                     Skip(result, original, new ServerText("Vol. {0}: its chapters overlap another volume's in the catalogue", Number(book.VolumeNumber)));
+                    continue;
+                }
+
+                if (unadjoined.Contains(book.Id))
+                {
+                    Skip(result, original, new ServerText("Vol. {0}: the catalogue's chapter list for this volume is not confirmed by a neighbouring volume's list", Number(book.VolumeNumber)));
                     continue;
                 }
 

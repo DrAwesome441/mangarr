@@ -10,6 +10,7 @@ using NzbDrone.Common.Http;
 using NzbDrone.Core.Blocklisting;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.History;
 using NzbDrone.Core.Indexers;
@@ -178,7 +179,11 @@ namespace NzbDrone.Core.MonthlyPacks
                 .Where(e => e.MediaType == MediaType.Archive)
                 .ToLookup(e => e.BookId);
             var files = _mediaFileService.GetFilesByBooks(ids).ToLookup(f => f.EditionId);
-            var queued = _queueService.GetQueue().Where(q => q.Book != null).Select(q => q.Book.Id).ToHashSet();
+            // Fan translations (2026-11-05): a queued fan copy holds back no official volume.
+            var queued = _queueService.GetQueue()
+                .Where(q => q.Book != null && q.Quality?.Quality != Quality.CbzFanTranslation)
+                .Select(q => q.Book.Id)
+                .ToHashSet();
             var releasedBy = DateTime.UtcNow.AddDays(-DaysAfterRelease);
             var eligible = new List<Book>();
 
@@ -189,7 +194,7 @@ namespace NzbDrone.Core.MonthlyPacks
                     : !book.Monitored ? "not monitored"
                     : archive == null || !archive.Monitored ? "archive edition not monitored"
                     : !book.ReleaseDate.HasValue || book.ReleaseDate.Value > releasedBy ? $"released less than {DaysAfterRelease} days ago"
-                    : files[archive.Id].Any(f => f.Quality?.Quality != Quality.CbzChapters) ? "already has a file"
+                    : files[archive.Id].Any(f => !UpgradableSpecification.IsStandIn(f.Quality)) ? "already has a file"
                     : queued.Contains(book.Id) ? "already in the queue"
                     : null;
 

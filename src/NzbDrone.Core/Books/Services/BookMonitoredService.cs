@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.Qualities;
 
 namespace NzbDrone.Core.Books
 {
@@ -15,13 +17,15 @@ namespace NzbDrone.Core.Books
         private readonly IAuthorService _authorService;
         private readonly IBookService _bookService;
         private readonly IEditionService _editionService;
+        private readonly IMediaFileService _mediaFileService;
         private readonly Logger _logger;
 
-        public BookMonitoredService(IAuthorService authorService, IBookService bookService, IEditionService editionService, Logger logger)
+        public BookMonitoredService(IAuthorService authorService, IBookService bookService, IEditionService editionService, IMediaFileService mediaFileService, Logger logger)
         {
             _authorService = authorService;
             _bookService = bookService;
             _editionService = editionService;
+            _mediaFileService = mediaFileService;
             _logger = logger;
         }
 
@@ -64,10 +68,13 @@ namespace NzbDrone.Core.Books
                             ToggleBooksMonitoredState(books, false);
                             break;
                         case MonitorTypes.Missing:
+                            // Fan translations (2026-11-05): a volume whose only files are fan translations still
+                            // misses its official copy, so it stays monitored (an unmonitored volume is never replaced).
+                            var fanOnly = FanTranslationOnly(booksWithFiles);
                             _logger.Debug("Unmonitoring Books with Files");
-                            ToggleBooksMonitoredState(books.Where(e => booksWithFiles.Select(c => c.Id).Contains(e.Id)), false);
+                            ToggleBooksMonitoredState(books.Where(e => booksWithFiles.Select(c => c.Id).Contains(e.Id) && !fanOnly.Contains(e.Id)), false);
                             _logger.Debug("Monitoring Books without Files");
-                            ToggleBooksMonitoredState(books.Where(e => booksWithoutFiles.Select(c => c.Id).Contains(e.Id)), true);
+                            ToggleBooksMonitoredState(books.Where(e => booksWithoutFiles.Select(c => c.Id).Contains(e.Id) || fanOnly.Contains(e.Id)), true);
                             break;
                         case MonitorTypes.Existing:
                             _logger.Debug("Monitoring Books with Files");
@@ -108,6 +115,21 @@ namespace NzbDrone.Core.Books
             }
 
             _authorService.UpdateAuthor(author);
+        }
+
+        // The books among those with files whose every file is a fan translation.
+        private HashSet<int> FanTranslationOnly(List<Book> booksWithFiles)
+        {
+            if (!booksWithFiles.Any())
+            {
+                return new HashSet<int>();
+            }
+
+            return _mediaFileService.GetFilesByBooks(booksWithFiles.Select(b => b.Id).Distinct())
+                .GroupBy(f => f.Edition.Value.BookId)
+                .Where(g => g.All(f => f.Quality?.Quality == Quality.CbzFanTranslation))
+                .Select(g => g.Key)
+                .ToHashSet();
         }
 
         private void ToggleBooksMonitoredState(IEnumerable<Book> books, bool monitored)

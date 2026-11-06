@@ -7,6 +7,8 @@ using Moq;
 using NUnit.Framework;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
+using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Test.Framework;
 using NzbDrone.Test.Common;
 
@@ -98,6 +100,33 @@ namespace NzbDrone.Core.Test.MusicTests.BookMonitoredServiceTests
             VerifyMonitored(e => e.ReleaseDate.HasValue && e.ReleaseDate.Value.After(DateTime.UtcNow));
             VerifyMonitored(e => !e.ReleaseDate.HasValue);
             VerifyNotMonitored(e => e.ReleaseDate.HasValue && e.ReleaseDate.Value.Before(DateTime.UtcNow));
+        }
+
+        // Fan translations (2026-11-05): "Missing" treats a volume whose only files are fan translations as
+        // missing, so it stays monitored and its official copy is still searched. A volume holding a CBZ
+        // (chapters) file is unmonitored as before.
+        [Test]
+        public void missing_keeps_a_volume_whose_only_files_are_fan_translations_monitored()
+        {
+            var fanOnly = _books[2];
+            var chapterBuilt = _books[3];
+
+            Mocker.GetMock<IBookService>()
+                .Setup(s => s.GetAuthorBooksWithFiles(It.IsAny<Author>()))
+                .Returns(new List<Book> { fanOnly, chapterBuilt });
+
+            Mocker.GetMock<IMediaFileService>()
+                .Setup(s => s.GetFilesByBooks(It.IsAny<IEnumerable<int>>()))
+                .Returns(new List<BookFile>
+                {
+                    new BookFile { Id = 1, EditionId = 30, Edition = new Edition { Id = 30, BookId = fanOnly.Id }, Quality = new QualityModel(Quality.CbzFanTranslation) },
+                    new BookFile { Id = 2, EditionId = 40, Edition = new Edition { Id = 40, BookId = chapterBuilt.Id }, Quality = new QualityModel(Quality.CbzChapters) }
+                });
+
+            Subject.SetBookMonitoredStatus(_author, new MonitoringOptions { Monitor = MonitorTypes.Missing });
+
+            fanOnly.Monitored.Should().BeTrue();
+            chapterBuilt.Monitored.Should().BeFalse();
         }
 
         private void VerifyMonitored(Func<Book, bool> predicate)

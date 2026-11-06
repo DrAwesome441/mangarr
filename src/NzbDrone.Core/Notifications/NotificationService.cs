@@ -6,6 +6,7 @@ using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Books.Events;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.HealthCheck;
 using NzbDrone.Core.MediaFiles;
@@ -62,6 +63,25 @@ namespace NzbDrone.Core.Notifications
 
         private string GetBookDownloadMessage(Author author, Book book, List<BookFile> tracks, List<BookFile> oldFiles)
         {
+            // Fan translations (2026-11-05): a fan copy says so, with the chapters its edition lists.
+            if (tracks.Any() && tracks.All(t => t.Quality?.Quality == Quality.CbzFanTranslation))
+            {
+                var fanChapters = tracks.First().Edition?.Value?.Chapters;
+
+                if (fanChapters != null && fanChapters.Any(c => c == Math.Floor(c)))
+                {
+                    return string.Format("{0} Vol. {1} fan translation (chapters {2}–{3})",
+                        author.Name,
+                        FormatNumber(book.VolumeNumber),
+                        FormatNumber(fanChapters.Where(c => c == Math.Floor(c)).Min()),
+                        FormatNumber(fanChapters.Max()));
+                }
+
+                return string.Format("{0} Vol. {1} fan translation",
+                    author.Name,
+                    FormatNumber(book.VolumeNumber));
+            }
+
             // Volumes built from chapter packs (2026-10-21): say so when a volume was built from
             // chapters, and when the official volume replaced a built copy.
             if (tracks.Any() && tracks.All(t => t.Quality?.Quality == Quality.CbzChapters))
@@ -76,6 +96,13 @@ namespace NzbDrone.Core.Notifications
                         FormatNumber(chapters.Where(c => c == Math.Floor(c)).Min()),
                         FormatNumber(chapters.Max()));
                 }
+            }
+            else if (tracks.Any() && tracks.All(t => !UpgradableSpecification.IsStandIn(t.Quality)) &&
+                     oldFiles != null && oldFiles.Any(f => f.Quality?.Quality == Quality.CbzFanTranslation))
+            {
+                return string.Format("{0} Vol. {1}: the official volume replaced the fan translation",
+                    author.Name,
+                    FormatNumber(book.VolumeNumber));
             }
             else if (tracks.Any() && tracks.All(t => t.Quality?.Quality != Quality.CbzChapters) &&
                      oldFiles != null && oldFiles.Any(f => f.Quality?.Quality == Quality.CbzChapters))

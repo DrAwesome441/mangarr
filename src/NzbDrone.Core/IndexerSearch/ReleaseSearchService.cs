@@ -9,11 +9,13 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Books.Chapters;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.IndexerSearch.Definitions;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MonthlyPacks;
 using NzbDrone.Core.Parser.Model;
+using NzbDrone.Core.Qualities;
 
 namespace NzbDrone.Core.IndexerSearch
 {
@@ -263,11 +265,13 @@ namespace NzbDrone.Core.IndexerSearch
             // Monthly volume packs (2026-10-21): next after the single-volume search, one pack query for a
             // volume nothing was found for. A person at the interactive table grabs nothing here, and a
             // command over several volumes (deferChapterSearch) or the bulk search makes one pack query for all.
+            // Fan translations (2026-11-05): a fan result is not "found"; when the pack takes the volume, the
+            // fan copy is dropped.
             if (mediaType == MediaType.Archive && searchPacks && deferChapterSearch == null && !interactiveSearch &&
-                !decisions.Any(d => d.Approved || d.TemporarilyRejected) &&
+                !FoundOfficial(decisions) &&
                 _monthlyPackService.Search(new List<Book> { book }).Any(b => b.Id == book.Id))
             {
-                return decisions;
+                return decisions.Where(d => !FanTranslationSpecification.IsFanTranslation(d)).ToList();
             }
 
             // Volumes built from chapter packs (2026-10-21): a chapter release is named by series and
@@ -291,13 +295,20 @@ namespace NzbDrone.Core.IndexerSearch
             return decisions;
         }
 
+        // Fan translations (2026-11-05): an approved or waiting fan result does not count, so the official
+        // pack and chapter legs still run for a volume a fan copy alone was found for (it is grabbed last).
+        private static bool FoundOfficial(List<DownloadDecision> decisions)
+        {
+            return decisions.Any(d => (d.Approved || d.TemporarilyRejected) && !FanTranslationSpecification.IsFanTranslation(d));
+        }
+
         private bool WantsChapterSearch(Author author, Edition edition, List<DownloadDecision> decisions)
         {
-            return !decisions.Any(d => d.Approved || d.TemporarilyRejected) &&
+            return !FoundOfficial(decisions) &&
                    ChapterVolumePlanner.IsEnabled(author, _configService) &&
                    edition?.Chapters != null &&
                    edition.Chapters.Any() &&
-                   !_mediaFileService.GetFilesByEdition(edition.Id).Any();
+                   !_mediaFileService.GetFilesByEdition(edition.Id).Any(f => f.Quality?.Quality != Quality.CbzFanTranslation);
         }
 
         private async Task<List<DownloadDecision>> ChapterSearch(Author author, List<Book> books, bool userInvokedSearch, bool interactiveSearch, bool stampLastSearch)

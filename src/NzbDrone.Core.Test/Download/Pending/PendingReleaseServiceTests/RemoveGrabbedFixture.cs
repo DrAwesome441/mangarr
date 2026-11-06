@@ -177,5 +177,62 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
 
             VerifyDelete();
         }
+
+        // Fan translations (2026-11-05): grabbing a fan copy never removes a pending official release of the
+        // volume, even on a profile where the user dragged the fan quality above it; the official copy will
+        // replace the fan copy. A pending fan copy is still removed, and CBZ (chapters) is judged as before.
+        private void GivenMangaProfileWithFanTranslationOnTop()
+        {
+            _profile.Items = new List<QualityProfileQualityItem>
+            {
+                new QualityProfileQualityItem { Allowed = true, Quality = Quality.CBZ },
+                new QualityProfileQualityItem { Allowed = true, Quality = Quality.CbzChapters },
+                new QualityProfileQualityItem { Allowed = true, Quality = Quality.CbzFanTranslation }
+            };
+            _profile.Cutoff = Quality.CbzFanTranslation.Id;
+        }
+
+        [TestCase("CBZ")]
+        [TestCase("CBZ (chapters)")]
+        public void should_not_delete_a_pending_official_release_when_a_fan_translation_is_grabbed(string pendingQuality)
+        {
+            GivenMangaProfileWithFanTranslationOnTop();
+            GivenHeldRelease(new QualityModel(Quality.All.Find(q => q.Name == pendingQuality)));
+
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CbzFanTranslation);
+            _remoteBook.MediaType = MediaType.Archive;
+
+            Subject.Handle(new BookGrabbedEvent(_remoteBook));
+
+            VerifyNoDelete();
+        }
+
+        [Test]
+        public void should_delete_a_pending_fan_translation_when_a_fan_translation_is_grabbed()
+        {
+            GivenMangaProfileWithFanTranslationOnTop();
+            GivenHeldRelease(new QualityModel(Quality.CbzFanTranslation));
+
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CbzFanTranslation);
+            _remoteBook.MediaType = MediaType.Archive;
+
+            Subject.Handle(new BookGrabbedEvent(_remoteBook));
+
+            VerifyDelete();
+        }
+
+        [Test]
+        public void should_still_delete_a_pending_lower_ranked_release_when_a_chapter_built_volume_is_grabbed()
+        {
+            GivenMangaProfileWithFanTranslationOnTop();
+            GivenHeldRelease(new QualityModel(Quality.CBZ));
+
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CbzChapters);
+            _remoteBook.MediaType = MediaType.Archive;
+
+            Subject.Handle(new BookGrabbedEvent(_remoteBook));
+
+            VerifyDelete();
+        }
     }
 }

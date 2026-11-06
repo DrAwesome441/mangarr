@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download.Clients;
 using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Exceptions;
@@ -54,6 +55,14 @@ namespace NzbDrone.Core.Download
 
                 //Skip if already grabbed
                 if (IsBookProcessed(grabbed, report))
+                {
+                    continue;
+                }
+
+                // Fan translations (2026-11-05): no fan copy while an official release of the volume is pending (a
+                // delay profile, or its download client was unavailable); the comparer lists official releases first.
+                if (FanTranslationSpecification.IsFanTranslation(report) &&
+                    IsBookProcessed(pending.Where(p => !FanTranslationSpecification.IsFanTranslation(p)).ToList(), report))
                 {
                     continue;
                 }

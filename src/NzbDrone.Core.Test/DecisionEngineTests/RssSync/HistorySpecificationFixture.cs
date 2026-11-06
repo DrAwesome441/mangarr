@@ -254,5 +254,57 @@ namespace NzbDrone.Core.Test.DecisionEngineTests.RssSync
 
             Mocker.GetMock<IHistoryService>().Verify(v => v.MostRecentForBook(FIRST_ALBUM_ID, MediaType.Audio), Times.Never());
         }
+
+        // Fan translations (2026-11-05)
+        private void GivenFanProfile(bool upgradeAllowed, bool fanRankedAboveCbz)
+        {
+            var items = new List<QualityProfileQualityItem>
+            {
+                new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true },
+                new QualityProfileQualityItem { Quality = Quality.CBZ, Allowed = true }
+            };
+
+            if (fanRankedAboveCbz)
+            {
+                items.Reverse();
+            }
+
+            _fakeAuthor.QualityProfile.Value.UpgradeAllowed = upgradeAllowed;
+            _fakeAuthor.QualityProfile.Value.Cutoff = Quality.CBZ.Id;
+            _fakeAuthor.QualityProfile.Value.Items = items;
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void an_official_release_is_accepted_after_a_recent_fan_grab(bool upgradeAllowed, bool fanRankedAboveCbz)
+        {
+            GivenFanProfile(upgradeAllowed, fanRankedAboveCbz);
+            GivenMostRecentForBook(FIRST_ALBUM_ID, string.Empty, new QualityModel(Quality.CbzFanTranslation), DateTime.UtcNow, EntityHistoryEventType.Grabbed);
+            _parseResultSingle.ParsedBookInfo.Quality = new QualityModel(Quality.CBZ);
+
+            _upgradeHistory.IsSatisfiedBy(_parseResultSingle, null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_fan_translation_is_rejected_after_a_recent_fan_grab()
+        {
+            GivenFanProfile(false, false);
+            GivenMostRecentForBook(FIRST_ALBUM_ID, string.Empty, new QualityModel(Quality.CbzFanTranslation), DateTime.UtcNow, EntityHistoryEventType.Grabbed);
+            _parseResultSingle.ParsedBookInfo.Quality = new QualityModel(Quality.CbzFanTranslation);
+
+            _upgradeHistory.IsSatisfiedBy(_parseResultSingle, null).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void a_recent_non_fan_grab_still_blocks_as_before()
+        {
+            GivenFanProfile(false, false);
+            GivenMostRecentForBook(FIRST_ALBUM_ID, string.Empty, new QualityModel(Quality.CBZ), DateTime.UtcNow, EntityHistoryEventType.Grabbed);
+            _parseResultSingle.ParsedBookInfo.Quality = new QualityModel(Quality.CBZ);
+
+            _upgradeHistory.IsSatisfiedBy(_parseResultSingle, null).Accepted.Should().BeFalse();
+        }
     }
 }

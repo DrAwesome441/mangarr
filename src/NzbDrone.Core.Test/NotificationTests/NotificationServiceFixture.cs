@@ -100,5 +100,47 @@ namespace NzbDrone.Core.Test.NotificationTests
 
             _sent.Message.Should().Be("Marriagetoxin - Marriagetoxin Vol. 9 (1 Files Imported)");
         }
+
+        // Fan translations (2026-11-05): a fan copy says so, with the chapters its edition lists.
+        [Test]
+        public void says_fan_translation_with_its_chapter_range()
+        {
+            _author.Metadata.Value.Name = "Sample Series";
+
+            Import(new List<BookFile> { File(Quality.CbzFanTranslation) }, new List<BookFile>());
+
+            _sent.Message.Should().Be("Sample Series Vol. 9 fan translation (chapters 72–81)");
+        }
+
+        [Test]
+        public void says_fan_translation_without_a_range_when_the_volume_lists_no_chapters()
+        {
+            _author.Metadata.Value.Name = "Sample Series";
+            _edition.Chapters = null;
+
+            Import(new List<BookFile> { File(Quality.CbzFanTranslation) }, new List<BookFile>());
+
+            _sent.Message.Should().Be("Sample Series Vol. 9 fan translation");
+        }
+
+        [Test]
+        public void says_the_official_volume_replaced_the_fan_translation()
+        {
+            _author.Metadata.Value.Name = "Sample Series";
+
+            Import(new List<BookFile> { File(Quality.CBZ) }, new List<BookFile> { File(Quality.CbzFanTranslation) });
+
+            _sent.Message.Should().Be("Sample Series Vol. 9: the official volume replaced the fan translation");
+        }
+
+        [Test]
+        public void a_chapter_built_volume_replacing_a_fan_translation_reads_as_built_from_chapters()
+        {
+            _author.Metadata.Value.Name = "Sample Series";
+
+            Import(new List<BookFile> { File(Quality.CbzChapters) }, new List<BookFile> { File(Quality.CbzFanTranslation) });
+
+            _sent.Message.Should().Be("Sample Series Vol. 9 built from chapters 72–81");
+        }
     }
 }

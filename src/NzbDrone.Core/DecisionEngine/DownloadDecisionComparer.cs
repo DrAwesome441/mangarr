@@ -27,6 +27,7 @@ namespace NzbDrone.Core.DecisionEngine
         {
             var comparers = new List<CompareDelegate>
             {
+                CompareFanTranslation,
                 CompareQuality,
                 CompareCustomFormatScore,
                 CompareProtocol,
@@ -64,6 +65,13 @@ namespace NzbDrone.Core.DecisionEngine
         private int CompareIndexerPriority(DownloadDecision x, DownloadDecision y)
         {
             return CompareByReverse(x.RemoteBook.Release, y.RemoteBook.Release, release => release.IndexerPriority);
+        }
+
+        // Fan translations (2026-11-05): an official release always outranks a fan copy, whatever order the
+        // profile gives the qualities (the user may drag the fan quality up).
+        private int CompareFanTranslation(DownloadDecision x, DownloadDecision y)
+        {
+            return CompareBy(x.RemoteBook, y.RemoteBook, remoteBook => remoteBook.ParsedBookInfo.Quality.Quality != Quality.CbzFanTranslation);
         }
 
         private int CompareQuality(DownloadDecision x, DownloadDecision y)

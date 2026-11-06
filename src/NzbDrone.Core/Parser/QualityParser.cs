@@ -91,6 +91,17 @@ namespace NzbDrone.Core.Parser
             return name != null && BuiltFromChaptersRegex.IsMatch(name) && name.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase);
         }
 
+        // Fan translations (2026-11-05): a release title or file name carrying "(Fan translation" grades the
+        // lowest quality, CBZ (fan translation). Release titles have no extension, so none is required.
+        private static readonly Regex FanTranslationRegex = new Regex(
+            @"\(fan translation",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        public static bool IsFanTranslation(string name)
+        {
+            return name != null && FanTranslationRegex.IsMatch(name);
+        }
+
         // Whether a release name carries an explicit ebook / light-novel signal. Exposed for the
         // tokenless-batch bridge, which applies this guard before defaulting a matched series
         // batch to CBZ; the group-tag signal applies here only, never to volume-token releases.
@@ -285,6 +296,12 @@ namespace NzbDrone.Core.Parser
             if (IsBuiltFromChapters(name))
             {
                 result.Quality = Quality.CbzChapters;
+                result.QualityDetectionSource = QualityDetectionSource.Name;
+            }
+
+            if (IsFanTranslation(name))
+            {
+                result.Quality = Quality.CbzFanTranslation;
                 result.QualityDetectionSource = QualityDetectionSource.Name;
             }
 

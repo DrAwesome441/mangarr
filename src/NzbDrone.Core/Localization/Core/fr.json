@@ -2172,6 +2172,9 @@
     "ServerRejectionEditionLanguageMissing": "Aucun marqueur de langue « {language} » dans cette version (la série est l'édition en {language})",
     "ServerRejectionExistingFileEqualOrHigher": "Les fichiers existants sur le disque ont une préférence égale ou supérieure : {quality}",
     "ServerRejectionExistingFilesMeetCutoff": "Les fichiers existants atteignent déjà le seuil : {quality}",
+    "ServerRejectionFanTranslationNeverReplaces": "Une traduction de fans ne remplace jamais un fichier existant",
+    "ServerRejectionFanTranslationNoReleaseDate": "Une traduction de fans n'est prise que pour un tome déjà sorti, et celui-ci n'a pas de date de sortie",
+    "ServerRejectionFanTranslationWaitDays": "Une traduction de fans n'est prise que {days} jours après la sortie du tome",
     "ServerRejectionFullSeriesPack": "Pack complet de la série",
     "ServerRejectionIndexerBlocked": "L'indexeur {indexer} est bloqué jusqu'au {until} en raison d'échecs, impossible de récupérer la version.",
     "ServerRejectionLanguageChinese": "chinois",
@@ -2264,6 +2267,7 @@
     "ServerQueueChapterVolumeEndTitle": "Fin du tome {volume}",
     "ServerQueueChapterVolumeMissing": "Tome {volume} : chapitre {chapter} manquant",
     "ServerQueueChapterVolumeOverlap": "Tome {volume} : ses chapitres recoupent ceux d'un autre tome dans le catalogue",
+    "ServerQueueChapterVolumeUnadjoined": "Tome {volume} : la liste de chapitres de ce tome dans le catalogue n'est pas confirmée par celle d'un tome voisin",
     "ServerQueueInvalidLocalPath": "[{path}] n'est pas un chemin local valide. Vous avez peut-être besoin d'un mappage de chemin distant.",
     "ServerQueueNoEligibleFiles": "Aucun fichier importable trouvé dans {path}",
     "ServerQueueNoIntermediatePath": "Le téléchargement ne contient pas de chemin intermédiaire, ignoré.",
@@ -2754,5 +2758,7 @@
     "PdfOriginalsFolderHelpText": "Original PDFs are moved here after they are converted to CBZ. Leave empty to use pdf-originals in Mangarr's app data folder. They can take a lot of space, so a folder on your large storage is a good choice. Use a dedicated empty folder: Mangarr marks it and refuses one that already holds files. Changing it does not move originals already kept.",
     "TaskNameCleanUpPdfOriginals": "Nettoyer les originaux PDF",
     "ServerProgressPdfOriginalsFolderUnusable": "PDF originals folder is not usable (check that it exists, is writable and is empty or already a Mangarr PDF originals folder); nothing was converted",
-    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries"
+    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries",
+    "FanTranslation": "Traduction de fans",
+    "FanTranslationChapters": "Traduction de fans, chapitres {first}–{last}"
 }

@@ -18,7 +18,7 @@ namespace NzbDrone.Core.Test.BookTests
     {
         private List<QualitiesBelowCutoff> _captured;
 
-        private void GivenProfile(bool upgradeAllowed, bool chaptersAllowed = true, bool chaptersAboveCutoff = false)
+        private void GivenProfile(bool upgradeAllowed, bool chaptersAllowed = true, bool chaptersAboveCutoff = false, bool fanAllowed = false)
         {
             var profile = new QualityProfile
             {
@@ -27,6 +27,7 @@ namespace NzbDrone.Core.Test.BookTests
                 Cutoff = Quality.CBZ.Id,
                 Items = new List<QualityProfileQualityItem>
                 {
+                    new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = fanAllowed },
                     new QualityProfileQualityItem { Quality = Quality.CbzChapters, Allowed = chaptersAllowed },
                     new QualityProfileQualityItem { Quality = Quality.PDF, Allowed = true },
                     new QualityProfileQualityItem { Quality = Quality.CBR, Allowed = true },
@@ -37,8 +38,8 @@ namespace NzbDrone.Core.Test.BookTests
             if (chaptersAboveCutoff)
             {
                 // CbzChapters ranked above the CBZ cutoff: the cutoff slice alone never holds it.
-                var chapters = profile.Items[0];
-                profile.Items.RemoveAt(0);
+                var chapters = profile.Items[1];
+                profile.Items.RemoveAt(1);
                 profile.Items.Add(chapters);
             }
 
@@ -57,7 +58,7 @@ namespace NzbDrone.Core.Test.BookTests
 
             Subject.BooksWhereCutoffUnmet(new PagingSpec<Book>());
 
-            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.CbzChapters.Id });
+            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.CbzFanTranslation.Id, Quality.CbzChapters.Id });
         }
 
         [Test]
@@ -67,7 +68,21 @@ namespace NzbDrone.Core.Test.BookTests
 
             Subject.BooksWhereCutoffUnmet(new PagingSpec<Book>());
 
-            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.PDF.Id, Quality.CBR.Id, Quality.CbzChapters.Id });
+            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.CbzFanTranslation.Id, Quality.PDF.Id, Quality.CBR.Id, Quality.CbzChapters.Id });
+        }
+
+        // Fan translations (2026-11-05): wanted whatever the profile says, allowed or not.
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void should_keep_a_fan_translation_wanted(bool upgradeAllowed, bool fanAllowed)
+        {
+            GivenProfile(upgradeAllowed, fanAllowed: fanAllowed);
+
+            Subject.BooksWhereCutoffUnmet(new PagingSpec<Book>());
+
+            _captured.Single().QualityIds.Should().Contain(Quality.CbzFanTranslation.Id);
         }
 
         [Test]
@@ -77,7 +92,7 @@ namespace NzbDrone.Core.Test.BookTests
 
             Subject.BooksWhereCutoffUnmet(new PagingSpec<Book>());
 
-            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.CbzChapters.Id, Quality.PDF.Id, Quality.CBR.Id });
+            _captured.Single().QualityIds.Should().BeEquivalentTo(new[] { Quality.CbzFanTranslation.Id, Quality.CbzChapters.Id, Quality.PDF.Id, Quality.CBR.Id });
         }
     }
 }

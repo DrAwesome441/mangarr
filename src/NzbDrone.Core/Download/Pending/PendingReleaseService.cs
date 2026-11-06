@@ -9,6 +9,7 @@ using NzbDrone.Core.Books.Events;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download.Aggregation;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Jobs;
@@ -418,6 +419,14 @@ namespace NzbDrone.Core.Download.Pending
 
             foreach (var existingReport in existingReports)
             {
+                // Fan translations (2026-11-05): a grabbed fan copy never removes a pending official release of the
+                // volume, whatever the profile's order; the official copy replaces the fan copy when it lands.
+                if (remoteBook.ParsedBookInfo.Quality?.Quality == Quality.CbzFanTranslation &&
+                    UpgradableSpecification.ReplacesStandIn(remoteBook.ParsedBookInfo.Quality, existingReport.RemoteBook.ParsedBookInfo.Quality))
+                {
+                    continue;
+                }
+
                 var compare = new QualityModelComparer(profile).Compare(remoteBook.ParsedBookInfo.Quality,
                                                                         existingReport.RemoteBook.ParsedBookInfo.Quality);
 

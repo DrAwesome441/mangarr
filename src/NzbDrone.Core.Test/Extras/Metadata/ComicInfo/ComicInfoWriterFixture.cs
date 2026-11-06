@@ -62,6 +62,14 @@ namespace NzbDrone.Core.Test.Extras.Metadata.ComicInfo
         }
 
         [Test]
+        public void a_fan_translation_gets_the_image_count_of_its_archive()
+        {
+            Write(Quality.CbzFanTranslation);
+
+            _written.Should().Contain("<PageCount>3</PageCount>");
+        }
+
+        [Test]
         public void any_other_file_keeps_the_editions_page_count()
         {
             Write(Quality.CBZ);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Books;
@@ -1094,6 +1095,253 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<IMonthlyPackService>()
                 .Verify(v => v.Search(It.Is<IEnumerable<Book>>(l => l.Select(b => b.Id).OrderBy(i => i).SequenceEqual(new[] { 1, 3, 4 }))), Times.Once());
+        }
+
+        // Fan translations (2026-11-05): a fan decision does not count as found. It is held back until the
+        // monthly-pack and chapter legs ran, and processed only for a volume nothing official took.
+        private static DownloadDecision FanDecision(Book book)
+        {
+            return new DownloadDecision(new RemoteBook
+            {
+                Books = new List<Book> { book },
+                ParsedBookInfo = new ParsedBookInfo { Quality = new QualityModel(Quality.CbzFanTranslation) },
+                Release = new ReleaseInfo { Guid = "fan-" + book.Id }
+            });
+        }
+
+        // Records "fan" for every ProcessDecisions call that carries the fan decision, which it grabs; any
+        // other decision listed in officialGrabs is grabbed too.
+        private void GivenProcessDecisionsGrabs(List<string> order, DownloadDecision fan, params DownloadDecision[] officialGrabs)
+        {
+            Mocker.GetMock<IProcessDownloadDecisions>()
+                .Setup(s => s.ProcessDecisions(It.IsAny<List<DownloadDecision>>()))
+                .Callback<List<DownloadDecision>>(l =>
+                {
+                    if (l.Contains(fan))
+                    {
+                        order.Add("fan");
+                    }
+                })
+                .Returns<List<DownloadDecision>>(l => Task.FromResult(new ProcessedDecisions(
+                    l.Where(d => d == fan || officialGrabs.Contains(d)).ToList(),
+                    new List<DownloadDecision>(),
+                    new List<DownloadDecision>())));
+        }
+
+        private void GivenMissingVolumeFourFindsOnly(DownloadDecision decision)
+        {
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.BookSearch(4, MediaType.Archive, false, true, false, true, It.IsAny<List<Book>>()))
+                .Callback<int, MediaType, bool, bool, bool, bool, List<Book>>((id, t, m, u, i, st, deferred) => deferred.Add(_books[3]))
+                .Returns(Task.FromResult(new List<DownloadDecision> { decision }));
+        }
+
+        private void GivenLegs(List<string> order, List<Book> packed, List<DownloadDecision> chapters = null)
+        {
+            Mocker.GetMock<IMonthlyPackService>()
+                .Setup(s => s.Search(It.IsAny<IEnumerable<Book>>()))
+                .Callback(() => order.Add("pack"))
+                .Returns(packed);
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.ChapterSearch(It.IsAny<List<Book>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                .Callback(() => order.Add("chapters"))
+                .Returns(Task.FromResult(chapters ?? new List<DownloadDecision>()));
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.ChapterSearch(It.IsAny<List<Book>>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                .Callback(() => order.Add("chapters"))
+                .Returns(Task.FromResult(chapters ?? new List<DownloadDecision>()));
+        }
+
+        [Test]
+        public void the_missing_search_offers_a_volume_with_only_a_fan_decision_to_the_pack_query_and_grabs_the_fan_copy_last()
+        {
+            var order = new List<string>();
+            var fan = FanDecision(_books[3]);
+            GivenMissingVolumeFourFindsOnly(fan);
+            GivenProcessDecisionsGrabs(order, fan);
+            GivenLegs(order, new List<Book>());
+
+            Subject.Execute(new MissingBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<IMonthlyPackService>()
+                .Verify(v => v.Search(It.Is<IEnumerable<Book>>(l => l.Any(b => b.Id == 4))), Times.Once());
+            order.Should().Equal("pack", "chapters", "fan");
+        }
+
+        [Test]
+        public void the_missing_search_does_not_grab_a_fan_copy_when_the_pack_takes_the_volume()
+        {
+            var order = new List<string>();
+            var fan = FanDecision(_books[3]);
+            GivenMissingVolumeFourFindsOnly(fan);
+            GivenProcessDecisionsGrabs(order, fan);
+            GivenLegs(order, new List<Book> { _books[3] });
+
+            Subject.Execute(new MissingBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            order.Should().Equal("pack");
+            Mocker.GetMock<IProcessDownloadDecisions>()
+                .Verify(v => v.ProcessDecisions(It.Is<List<DownloadDecision>>(l => l.Contains(fan))), Times.Never());
+        }
+
+        [Test]
+        public void the_missing_search_does_not_grab_a_fan_copy_when_a_chapter_release_takes_the_volume()
+        {
+            var order = new List<string>();
+            var fan = FanDecision(_books[3]);
+            var chapters = new DownloadDecision(new RemoteBook
+            {
+                Books = new List<Book> { _books[3] },
+                ParsedBookInfo = new ParsedBookInfo { Quality = new QualityModel(Quality.CbzChapters) },
+                Release = new ReleaseInfo { Guid = "chapters" }
+            });
+            GivenMissingVolumeFourFindsOnly(fan);
+            GivenProcessDecisionsGrabs(order, fan, chapters);
+            GivenLegs(order, new List<Book>(), new List<DownloadDecision> { chapters });
+
+            Subject.Execute(new MissingBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            order.Should().Equal("pack", "chapters");
+            Mocker.GetMock<IProcessDownloadDecisions>()
+                .Verify(v => v.ProcessDecisions(It.Is<List<DownloadDecision>>(l => l.Contains(chapters))), Times.Once());
+            Mocker.GetMock<IProcessDownloadDecisions>()
+                .Verify(v => v.ProcessDecisions(It.Is<List<DownloadDecision>>(l => l.Contains(fan))), Times.Never());
+        }
+
+        [Test]
+        public void a_multi_volume_command_offers_a_volume_with_only_a_fan_decision_to_the_pack_query_and_grabs_the_fan_copy_last()
+        {
+            var series = new Author { Id = 1, Metadata = new AuthorMetadata { ForeignAuthorId = "series-a" } };
+            var volumes = new List<Book>
+            {
+                new Book { Id = 1, AuthorId = 1, Author = series },
+                new Book { Id = 2, AuthorId = 1, Author = series }
+            };
+            GivenBooksById(volumes);
+            var order = new List<string>();
+            var fan = FanDecision(volumes[0]);
+
+            // Both volume searches ask for the chapter query; volume 1 found only a fan translation.
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.BookSearch(It.IsAny<int>(), false, true, false, It.IsAny<List<Book>>()))
+                .Callback<int, bool, bool, bool, List<Book>>((id, m, u, i, deferred) => deferred.Add(volumes.Single(b => b.Id == id)))
+                .Returns<int, bool, bool, bool, List<Book>>((id, m, u, i, deferred) => Task.FromResult(id == 1
+                    ? new List<DownloadDecision> { fan }
+                    : new List<DownloadDecision>()));
+            GivenProcessDecisionsGrabs(order, fan);
+            GivenLegs(order, new List<Book>());
+
+            Subject.Execute(new BookSearchCommand(new List<int> { 1, 2 }) { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<IMonthlyPackService>()
+                .Verify(v => v.Search(It.Is<IEnumerable<Book>>(l => l.Select(b => b.Id).OrderBy(i => i).SequenceEqual(new[] { 1, 2 }))), Times.Once());
+            order.Should().Equal("pack", "chapters", "fan");
+        }
+
+        [Test]
+        public void a_multi_volume_command_does_not_grab_a_fan_copy_when_the_pack_takes_the_volume()
+        {
+            var series = new Author { Id = 1, Metadata = new AuthorMetadata { ForeignAuthorId = "series-a" } };
+            var volumes = new List<Book>
+            {
+                new Book { Id = 1, AuthorId = 1, Author = series },
+                new Book { Id = 2, AuthorId = 1, Author = series }
+            };
+            GivenBooksById(volumes);
+            var order = new List<string>();
+            var fan = FanDecision(volumes[0]);
+
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.BookSearch(It.IsAny<int>(), false, true, false, It.IsAny<List<Book>>()))
+                .Callback<int, bool, bool, bool, List<Book>>((id, m, u, i, deferred) => deferred.Add(volumes.Single(b => b.Id == id)))
+                .Returns<int, bool, bool, bool, List<Book>>((id, m, u, i, deferred) => Task.FromResult(id == 1
+                    ? new List<DownloadDecision> { fan }
+                    : new List<DownloadDecision>()));
+            GivenProcessDecisionsGrabs(order, fan);
+            GivenLegs(order, new List<Book> { volumes[0] });
+
+            Subject.Execute(new BookSearchCommand(new List<int> { 1, 2 }) { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<IProcessDownloadDecisions>()
+                .Verify(v => v.ProcessDecisions(It.Is<List<DownloadDecision>>(l => l.Contains(fan))), Times.Never());
+        }
+
+        // The single-volume command runs its legs inside the volume search; a fan copy nothing official took
+        // is still grabbed.
+        [Test]
+        public void a_single_volume_command_still_grabs_a_fan_copy_nothing_official_took()
+        {
+            var series = new Author { Id = 1, Metadata = new AuthorMetadata { ForeignAuthorId = "series-a" } };
+            var volume = new Book { Id = 1, AuthorId = 1, Author = series };
+            GivenBooksById(new List<Book> { volume });
+            var order = new List<string>();
+            var fan = FanDecision(volume);
+            Mocker.GetMock<ISearchForReleases>()
+                .Setup(s => s.BookSearch(1, false, true, false))
+                .Returns(Task.FromResult(new List<DownloadDecision> { fan }));
+            GivenProcessDecisionsGrabs(order, fan);
+
+            Subject.Execute(new BookSearchCommand(new List<int> { 1 }) { Trigger = CommandTrigger.Manual });
+
+            order.Should().Equal("fan");
+        }
+
+        // Fan translations (2026-11-05): a queued fan copy does not stop the search for the official volume;
+        // a queued official copy still does.
+        private void GivenVolumeFourQueuedAs(Quality quality)
+        {
+            Mocker.GetMock<IQueueService>()
+                .Setup(s => s.GetQueue())
+                .Returns(new List<NzbDrone.Core.Queue.Queue>
+                {
+                    new NzbDrone.Core.Queue.Queue
+                    {
+                        Book = _books[3],
+                        Quality = new QualityModel(quality),
+                        RemoteBook = new RemoteBook { MediaType = MediaType.Archive, ParsedBookInfo = new ParsedBookInfo { Quality = new QualityModel(quality) } }
+                    }
+                });
+        }
+
+        [Test]
+        public void the_missing_search_still_searches_a_volume_whose_queued_copy_is_a_fan_translation()
+        {
+            GivenVolumeFourQueuedAs(Quality.CbzFanTranslation);
+
+            Subject.Execute(new MissingBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<ISearchForReleases>()
+                .Verify(v => v.BookSearch(4, MediaType.Archive, false, true, false, true, It.IsAny<List<Book>>()), Times.Once());
+        }
+
+        [Test]
+        public void the_missing_search_still_skips_a_volume_whose_queued_copy_is_official()
+        {
+            GivenVolumeFourQueuedAs(Quality.CBZ);
+
+            Subject.Execute(new MissingBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<ISearchForReleases>()
+                .Verify(v => v.BookSearch(4, It.IsAny<MediaType>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<List<Book>>()), Times.Never());
+        }
+
+        [Test]
+        public void the_cutoff_search_still_searches_a_volume_whose_queued_copy_is_a_fan_translation()
+        {
+            GivenVolumeFourQueuedAs(Quality.CbzFanTranslation);
+            Mocker.GetMock<IBookCutoffService>()
+                .Setup(s => s.BooksWhereCutoffUnmet(It.IsAny<PagingSpec<Book>>(), It.IsAny<LibraryType?>(), It.IsAny<WantedMediaTypeFilter?>()))
+                .Returns((PagingSpec<Book> spec, LibraryType? library, WantedMediaTypeFilter? mediaType) =>
+                {
+                    spec.Records = new List<Book> { _books[3] };
+                    spec.TotalRecords = 1;
+                    return spec;
+                });
+
+            Subject.Execute(new CutoffUnmetBookSearchCommand { Trigger = CommandTrigger.Manual });
+
+            Mocker.GetMock<ISearchForReleases>()
+                .Verify(v => v.BookSearch(4, MediaType.Archive, false, true, false, true, It.IsAny<List<Book>>()), Times.Once());
         }
     }
 }

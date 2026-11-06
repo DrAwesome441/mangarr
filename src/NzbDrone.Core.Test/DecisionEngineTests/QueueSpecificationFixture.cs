@@ -420,5 +420,61 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
             _remoteBook.MediaType = MediaType.Audio;
             Subject.IsSatisfiedBy(_remoteBook, null).Accepted.Should().BeFalse();
         }
+
+        // Fan translations (2026-11-05)
+        private RemoteBook GivenQueuedAs(Quality quality, bool upgradeAllowed, bool fanRankedAboveCbz)
+        {
+            _author.QualityProfile.Value.UpgradeAllowed = upgradeAllowed;
+            _author.QualityProfile.Value.Cutoff = Quality.CBZ.Id;
+            var items = new List<QualityProfileQualityItem>
+            {
+                new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true },
+                new QualityProfileQualityItem { Quality = Quality.CBZ, Allowed = true }
+            };
+            if (fanRankedAboveCbz)
+            {
+                items.Reverse();
+            }
+
+            _author.QualityProfile.Value.Items = items;
+
+            return Builder<RemoteBook>.CreateNew()
+                .With(r => r.Author = _author)
+                .With(r => r.Books = new List<Book> { _book })
+                .With(r => r.ParsedBookInfo = new ParsedBookInfo { Quality = new QualityModel(quality) })
+                .With(r => r.CustomFormats = new List<CustomFormat>())
+                .With(r => r.Release = _releaseInfo)
+                .Build();
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void an_official_release_is_accepted_while_a_fan_translation_is_queued(bool upgradeAllowed, bool fanRankedAboveCbz)
+        {
+            GivenQueue(new List<RemoteBook> { GivenQueuedAs(Quality.CbzFanTranslation, upgradeAllowed, fanRankedAboveCbz) });
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CBZ);
+
+            Subject.IsSatisfiedBy(_remoteBook, null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_fan_translation_is_rejected_while_a_fan_translation_is_queued()
+        {
+            GivenQueue(new List<RemoteBook> { GivenQueuedAs(Quality.CbzFanTranslation, false, false) });
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CbzFanTranslation);
+
+            Subject.IsSatisfiedBy(_remoteBook, null).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void a_queued_non_fan_item_still_blocks_as_before()
+        {
+            GivenQueue(new List<RemoteBook> { GivenQueuedAs(Quality.CBZ, false, false) });
+            _remoteBook.ParsedBookInfo.Quality = new QualityModel(Quality.CBZ);
+
+            Subject.IsSatisfiedBy(_remoteBook, null).Accepted.Should().BeFalse();
+        }
     }
 }

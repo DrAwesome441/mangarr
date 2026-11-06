@@ -18,8 +18,11 @@ import styles from './BookFileEditorRow.css';
 // edition lists -- the first whole chapter to the last one listed (a trailing n.5 included).
 const CBZ_CHAPTERS_QUALITY_ID = 9;
 
-function getChapterRange(quality, chapters) {
-  if (!quality || !quality.quality || quality.quality.id !== CBZ_CHAPTERS_QUALITY_ID || !chapters) {
+// Fan translations (2026-11-05): a CBZ (fan translation) file is labelled the same way.
+const FAN_TRANSLATION_QUALITY_ID = 14;
+
+function getChapterRange(quality, chapters, qualityId) {
+  if (!quality || !quality.quality || quality.quality.id !== qualityId || !chapters) {
     return null;
   }
 
@@ -55,7 +58,9 @@ function BookFileEditorRow(props) {
   // manga (CBZ) files don't go through calibre's format conversion. A light novel's .pdf is an
   // ebook (LN PDF, 2026-09-22), and calibre lists its PDF like any format.
   const showFormats = isLightNovel && mediaTypeOfFile(path, 'lightNovel') === EBOOK;
-  const chapterRange = getChapterRange(quality, chapters);
+  const chapterRange = getChapterRange(quality, chapters, CBZ_CHAPTERS_QUALITY_ID);
+  const isFanTranslation = !!quality && !!quality.quality && quality.quality.id === FAN_TRANSLATION_QUALITY_ID;
+  const fanRange = getChapterRange(quality, chapters, FAN_TRANSLATION_QUALITY_ID);
 
   return (
     <TableRow>
@@ -88,6 +93,17 @@ function BookFileEditorRow(props) {
               kind={kinds.INFO}
             >
               {translate('BuiltFromChapters', chapterRange)}
+            </Label> :
+            null
+        }
+
+        {
+          isFanTranslation ?
+            <Label
+              className={styles.builtFromChapters}
+              kind={kinds.WARNING}
+            >
+              {fanRange ? translate('FanTranslationChapters', fanRange) : translate('FanTranslation')}
             </Label> :
             null
         }

@@ -2172,6 +2172,9 @@
     "ServerRejectionEditionLanguageMissing": "Keine Sprachkennzeichnung für {language} in diesem Release (die Serie ist die Ausgabe auf {language})",
     "ServerRejectionExistingFileEqualOrHigher": "Die vorhandenen Dateien auf der Festplatte haben gleiche oder höhere Präferenz: {quality}",
     "ServerRejectionExistingFilesMeetCutoff": "Die vorhandenen Dateien erreichen bereits die Schwelle: {quality}",
+    "ServerRejectionFanTranslationNeverReplaces": "Eine Fanübersetzung ersetzt nie eine vorhandene Datei",
+    "ServerRejectionFanTranslationNoReleaseDate": "Eine Fanübersetzung wird nur für einen erschienenen Band genommen, und dieser hat kein Veröffentlichungsdatum",
+    "ServerRejectionFanTranslationWaitDays": "Eine Fanübersetzung wird erst {days} Tage nach der Veröffentlichung des Bands genommen",
     "ServerRejectionFullSeriesPack": "Komplettpaket der Serie",
     "ServerRejectionIndexerBlocked": "Der Indexer {indexer} ist wegen Fehlern bis {until} gesperrt, das Release kann nicht geholt werden.",
     "ServerRejectionLanguageChinese": "Chinesisch",
@@ -2264,6 +2267,7 @@
     "ServerQueueChapterVolumeEndTitle": "Ende von Band {volume}",
     "ServerQueueChapterVolumeMissing": "Band {volume}: Kapitel {chapter} fehlt",
     "ServerQueueChapterVolumeOverlap": "Band {volume}: seine Kapitel überschneiden sich im Katalog mit denen eines anderen Bandes",
+    "ServerQueueChapterVolumeUnadjoined": "Band {volume}: die Kapitelliste dieses Bandes im Katalog wird von der Liste eines Nachbarbandes nicht bestätigt",
     "ServerQueueInvalidLocalPath": "[{path}] ist kein gültiger lokaler Pfad. Möglicherweise benötigen Sie eine Remote-Pfadzuordnung.",
     "ServerQueueNoEligibleFiles": "In {path} wurden keine importierbaren Dateien gefunden",
     "ServerQueueNoIntermediatePath": "Der Download enthält keinen Zwischenpfad, wird übersprungen.",
@@ -2754,5 +2758,7 @@
     "PdfOriginalsFolderHelpText": "Original PDFs are moved here after they are converted to CBZ. Leave empty to use pdf-originals in Mangarr's app data folder. They can take a lot of space, so a folder on your large storage is a good choice. Use a dedicated empty folder: Mangarr marks it and refuses one that already holds files. Changing it does not move originals already kept.",
     "TaskNameCleanUpPdfOriginals": "PDF-Originale bereinigen",
     "ServerProgressPdfOriginalsFolderUnusable": "PDF originals folder is not usable (check that it exists, is writable and is empty or already a Mangarr PDF originals folder); nothing was converted",
-    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries"
+    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries",
+    "FanTranslation": "Fanübersetzung",
+    "FanTranslationChapters": "Fanübersetzung, Kapitel {first}–{last}"
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -31,6 +32,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
                 FormatItems = CustomFormatsTestHelpers.GetSampleFormatItems("None"),
                 Items = new List<QualityProfileQualityItem>
                 {
+                    new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true },
                     new QualityProfileQualityItem { Quality = Quality.CbzChapters, Allowed = true },
                     new QualityProfileQualityItem { Quality = Quality.PDF, Allowed = true },
                     new QualityProfileQualityItem { Quality = Quality.CBR, Allowed = true },
@@ -61,30 +63,59 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
     }
 
     [TestFixture]
-    public class ReplacesChapterBuiltFixture
+    public class ReplacesStandInFixture
     {
         [Test]
         public void chapter_built_is_replaced_by_a_real_volume()
         {
-            UpgradableSpecification.ReplacesChapterBuilt(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.CBZ)).Should().BeTrue();
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.CBZ)).Should().BeTrue();
         }
 
         [Test]
         public void chapter_built_is_not_replaced_by_chapter_built()
         {
-            UpgradableSpecification.ReplacesChapterBuilt(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.CbzChapters)).Should().BeFalse();
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.CbzChapters)).Should().BeFalse();
         }
 
         [Test]
         public void chapter_built_is_not_replaced_by_an_unknown_quality()
         {
-            UpgradableSpecification.ReplacesChapterBuilt(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.Unknown)).Should().BeFalse();
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.CbzChapters), new QualityModel(Quality.Unknown)).Should().BeFalse();
         }
 
         [Test]
         public void a_real_volume_is_not_a_chapter_built_replacement()
         {
-            UpgradableSpecification.ReplacesChapterBuilt(new QualityModel(Quality.CBZ), new QualityModel(Quality.CBZ)).Should().BeFalse();
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.CBZ), new QualityModel(Quality.CBZ)).Should().BeFalse();
+        }
+
+        // Fan translations (2026-11-05): any official copy replaces a fan copy, a fan copy replaces nothing.
+        [TestCase(14, 2, true)]   // fan -> CBZ
+        [TestCase(14, 9, true)]   // fan -> CbzChapters
+        [TestCase(14, 1, true)]   // fan -> PDF
+        [TestCase(14, 14, false)] // fan -> fan
+        [TestCase(14, 0, false)]  // fan -> Unknown
+        [TestCase(9, 14, false)]  // chapters -> fan
+        [TestCase(2, 14, false)]  // CBZ -> fan
+        public void fan_translation_stand_in_rules(int existingId, int incomingId, bool expected)
+        {
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.All.Single(q => q.Id == existingId)), new QualityModel(Quality.All.Single(q => q.Id == incomingId))).Should().Be(expected);
+        }
+
+        [Test]
+        public void a_missing_quality_is_never_replaced_or_replacing()
+        {
+            UpgradableSpecification.ReplacesStandIn(null, new QualityModel(Quality.CBZ)).Should().BeFalse();
+            UpgradableSpecification.ReplacesStandIn(new QualityModel(Quality.CbzFanTranslation), null).Should().BeFalse();
+        }
+
+        [Test]
+        public void only_chapters_and_fan_translations_are_stand_ins()
+        {
+            UpgradableSpecification.IsStandIn(new QualityModel(Quality.CbzChapters)).Should().BeTrue();
+            UpgradableSpecification.IsStandIn(new QualityModel(Quality.CbzFanTranslation)).Should().BeTrue();
+            UpgradableSpecification.IsStandIn(new QualityModel(Quality.CBZ)).Should().BeFalse();
+            UpgradableSpecification.IsStandIn(null).Should().BeFalse();
         }
     }
 
@@ -97,6 +128,19 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
             Mocker.Resolve<UpgradableSpecification>();
             CustomFormatsTestHelpers.GivenCustomFormats();
             Mocker.GetMock<ICustomFormatCalculationService>().Setup(x => x.ParseCustomFormat(It.IsAny<BookFile>())).Returns(new List<CustomFormat>());
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void an_official_volume_replaces_a_fan_translation(bool fanRankedAboveCbz)
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CBZ, chaptersRankedAboveCbz: fanRankedAboveCbz), null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_chapter_built_volume_replaces_a_fan_translation()
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CbzChapters), null).Accepted.Should().BeTrue();
         }
 
         [Test]
@@ -135,6 +179,19 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
             Mocker.GetMock<ICustomFormatCalculationService>().Setup(x => x.ParseCustomFormat(It.IsAny<BookFile>(), It.IsAny<Author>())).Returns(new List<CustomFormat>());
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void an_official_volume_replaces_a_fan_translation(bool fanRankedAboveCbz)
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CBZ, chaptersRankedAboveCbz: fanRankedAboveCbz), null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_chapter_built_volume_replaces_a_fan_translation()
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CbzChapters), null).Accepted.Should().BeTrue();
+        }
+
         [Test]
         public void real_volume_replaces_the_chapter_built_file_although_upgrades_are_off()
         {
@@ -166,6 +223,19 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
             Mocker.GetMock<ICustomFormatCalculationService>().Setup(x => x.ParseCustomFormat(It.IsAny<BookFile>())).Returns(new List<CustomFormat>());
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void an_official_volume_replaces_a_fan_translation(bool fanRankedAboveCbz)
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CBZ, chaptersRankedAboveCbz: fanRankedAboveCbz), null).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void a_chapter_built_volume_replaces_a_fan_translation()
+        {
+            Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CbzFanTranslation, Quality.CbzChapters), null).Accepted.Should().BeTrue();
+        }
+
         [Test]
         public void real_volume_replaces_the_chapter_built_file_although_it_is_the_cutoff()
         {
@@ -182,6 +252,27 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
         public void cbz_over_cbz_is_rejected_as_before()
         {
             Subject.IsSatisfiedBy(ChapterBuiltFixtureData.MangaVolume(Quality.CBZ, Quality.CBZ), null).Accepted.Should().BeFalse();
+        }
+    }
+
+    [TestFixture]
+    public class FanTranslationCutoffFixture : CoreTest<UpgradableSpecification>
+    {
+        [Test]
+        public void a_fan_translation_never_meets_the_cutoff()
+        {
+            var profile = new QualityProfile
+            {
+                UpgradeAllowed = false,
+                Cutoff = Quality.CbzFanTranslation.Id,
+                Items = new List<QualityProfileQualityItem>
+                {
+                    new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true },
+                    new QualityProfileQualityItem { Quality = Quality.CBZ, Allowed = false }
+                }
+            };
+
+            Subject.QualityCutoffNotMet(profile, new QualityModel(Quality.CbzFanTranslation)).Should().BeTrue();
         }
     }
 }

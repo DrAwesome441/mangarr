@@ -53,7 +53,8 @@ namespace NzbDrone.Core.Test.BookTests.Chapters
         [Test]
         public void a_missing_whole_chapter_plans_nothing()
         {
-            var plan = ChapterVolumePlanner.Plan(new List<double> { 1, 2, 3, 4, 6 }, new List<Book> { Volume(1, Range(1, 6)) }, MediaType.Archive);
+            var books = new List<Book> { Volume(1, Range(1, 6)), Volume(2, Range(7, 12)) };
+            var plan = ChapterVolumePlanner.Plan(new List<double> { 1, 2, 3, 4, 6 }, books, MediaType.Archive);
 
             plan.Should().BeEmpty();
         }
@@ -79,7 +80,10 @@ namespace NzbDrone.Core.Test.BookTests.Chapters
             var chapters = Range(1, 6);
             chapters.Insert(3, 3.5);
 
-            var plan = ChapterVolumePlanner.Plan(Range(1, 6), new List<Book> { Volume(1, chapters) }, MediaType.Archive);
+            // Vol. 2 adjoins (2026-11-05): a lone listed volume is no longer trusted.
+            var books = new List<Book> { Volume(1, chapters), Volume(2, Range(7, 12)) };
+
+            var plan = ChapterVolumePlanner.Plan(Range(1, 6), books, MediaType.Archive);
 
             plan.Should().ContainSingle();
             plan[0].Chapters.Should().Equal(Range(1, 6));
@@ -144,9 +148,161 @@ namespace NzbDrone.Core.Test.BookTests.Chapters
             var available = Range(72, 81);
             available.Add(73.5);
 
-            ChapterVolumePlanner.Plan(available, new List<Book> { Volume(9, chapters) }, MediaType.Archive);
+            // Vol. 8 adjoins, so the planner reaches the code that could touch the list.
+            var plan = ChapterVolumePlanner.Plan(available, new List<Book> { Volume(8, Range(62, 71)), Volume(9, chapters) }, MediaType.Archive);
 
+            plan.Should().ContainSingle().Which.Chapters.Should().Contain(73.5);
             chapters.Should().Equal(Range(72, 81));
+        }
+
+        // Adjacency (2026-11-05): a list is trusted only when it adjoins a listed neighbour and
+        // contradicts none; about 17% of catalogue lists hold just the volume's first chapter.
+        private static List<int> Planned(List<Book> books)
+        {
+            return ChapterVolumePlanner.Plan(Range(1, 100), books, MediaType.Archive).Select(p => (int)p.Book.VolumeNumber).ToList();
+        }
+
+        [Test]
+        public void first_chapter_only_lists_plan_nothing()
+        {
+            var books = new List<Book>
+            {
+                Volume(1, new List<double> { 1 }),
+                Volume(2, new List<double> { 12 }),
+                Volume(3, new List<double> { 22 })
+            };
+
+            Planned(books).Should().BeEmpty();
+            ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEquivalentTo(new[] { 1, 2, 3 });
+        }
+
+        [Test]
+        public void adjoining_lists_plan_every_volume()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(8, 14)), Volume(3, Range(15, 21)) };
+
+            Planned(books).Should().Equal(1, 2, 3);
+            ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEmpty();
+        }
+
+        [Test]
+        public void a_lone_listed_volume_plans_nothing()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, null), Volume(3, new List<double>()) };
+
+            Planned(books).Should().BeEmpty();
+        }
+
+        [Test]
+        public void the_last_listed_volume_is_planned_after_an_adjoining_one()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(8, 14)), Volume(3, null) };
+
+            Planned(books).Should().Equal(1, 2);
+        }
+
+        [Test]
+        public void one_adjoining_and_one_contradicting_neighbour_plans_only_the_first_volume()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(8, 14)), Volume(3, new List<double> { 20 }) };
+
+            Planned(books).Should().Equal(1);
+            ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEquivalentTo(new[] { 2, 3 });
+        }
+
+        [Test]
+        public void a_half_chapter_still_rides_with_its_volume()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(8, 14)) };
+
+            var plan = ChapterVolumePlanner.Plan(Range(1, 14).Concat(new[] { 7.5 }).ToList(), books, MediaType.Archive);
+
+            plan.Select(p => p.Book.VolumeNumber).Should().Equal(1, 2);
+            plan[0].Chapters.Should().Equal(1, 2, 3, 4, 5, 6, 7, 7.5);
+        }
+
+        [Test]
+        public void a_gap_in_volume_numbers_plans_neither_side()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(3, Range(15, 21)) };
+
+            Planned(books).Should().BeEmpty();
+        }
+
+        // 2026-11-05: a neighbour cannot confirm a fractional volume number, so its list is not trusted.
+        [Test]
+        public void a_non_whole_volume_number_is_not_planned()
+        {
+            var book = Volume(1, Range(1, 7));
+            book.VolumeNumber = 1.5;
+
+            Planned(new List<Book> { book }).Should().BeEmpty();
+            ChapterVolumePlanner.Unadjoined(new List<Book> { book }, MediaType.Archive).Should().BeEquivalentTo(new[] { 1 });
+        }
+
+        [Test]
+        public void volume_zero_is_not_planned_from_a_first_chapter_only_list()
+        {
+            var book = Volume(1, new List<double> { 1 });
+            book.VolumeNumber = 0;
+
+            Planned(new List<Book> { book }).Should().BeEmpty();
+        }
+
+        [Test]
+        public void an_overlapping_volume_confirms_no_neighbour()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(7, 13)), Volume(3, Range(14, 20)) };
+
+            Planned(books).Should().BeEmpty();
+        }
+
+        [Test]
+        public void the_newest_volume_with_a_first_chapter_only_list_is_not_planned()
+        {
+            var books = new List<Book> { Volume(9, Range(72, 81)), Volume(10, new List<double> { 82 }), Volume(11, null) };
+
+            Planned(books).Should().Equal(9);
+        }
+
+        [Test]
+        public void a_first_chapter_only_list_confirmed_by_the_next_volume_is_planned()
+        {
+            var books = new List<Book> { Volume(1, new List<double> { 1 }), Volume(2, Range(2, 8)) };
+
+            Planned(books).Should().Equal(1, 2);
+        }
+
+        // A hole in a list (chapter 10 missing) refuses that list and its end confirms no one; its start
+        // still confirms the volume before it.
+        [Test]
+        public void a_list_with_a_hole_is_not_planned_and_does_not_confirm_its_next_volume()
+        {
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, new List<double> { 8, 9, 11, 12 }), Volume(3, Range(13, 19)) };
+
+            Planned(books).Should().Equal(1);
+        }
+
+        [Test]
+        public void a_volume_number_held_by_two_listed_books_is_ambiguous()
+        {
+            var twin = Volume(2, Range(30, 36));
+            twin.Id = 22;
+            var books = new List<Book> { Volume(1, Range(1, 7)), Volume(2, Range(8, 14)), twin, Volume(3, Range(15, 21)) };
+
+            // Neither Vol. 2 is trusted or confirms a neighbour: Vol. 1 and Vol. 3 have none left.
+            Planned(books).Should().BeEmpty();
+            ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEquivalentTo(new[] { 1, 2, 22, 3 });
+        }
+
+        [Test]
+        public void an_unnumbered_volume_is_refused_and_is_nobodys_neighbour()
+        {
+            var unnumbered = Volume(5, Range(8, 14));
+            unnumbered.VolumeNumber = 0;
+            var books = new List<Book> { Volume(1, Range(1, 7)), unnumbered };
+
+            ChapterVolumePlanner.Unadjoined(books, MediaType.Archive).Should().BeEquivalentTo(new[] { 1, 5 });
         }
     }
 }

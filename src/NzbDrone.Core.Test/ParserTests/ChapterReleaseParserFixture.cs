@@ -206,6 +206,26 @@ namespace NzbDrone.Core.Test.ParserTests
             QualityParser.ParseQuality("Marriagetoxin v01 (Built from chapters 1-9).cbz").Quality.Should().Be(Quality.CbzChapters);
         }
 
+        // Fan translations (2026-11-05): the "(Fan translation" marker grades the lowest quality, in a release
+        // title (no extension) or a file name, in any case.
+        [TestCase("Sample Series v05 (Fan translation) (MangaDex)")]
+        [TestCase("Sample Series v05 (fan translation, chapters 40\u201348).cbz")]
+        [TestCase("Sample.Series.v05.(FAN TRANSLATION).cbz")]
+        public void should_grade_a_fan_translation_by_its_marker(string name)
+        {
+            var result = QualityParser.ParseQuality(name);
+
+            result.Quality.Should().Be(Quality.CbzFanTranslation);
+            result.QualityDetectionSource.Should().Be(QualityDetectionSource.Name);
+        }
+
+        [TestCase("Sample Series v05 (Digital) (Group)")]
+        [TestCase("Sample Series v05 Fan Translation Notes")]
+        public void should_not_grade_other_names_as_fan_translation(string name)
+        {
+            QualityParser.ParseQuality(name).Quality.Should().NotBe(Quality.CbzFanTranslation);
+        }
+
         [Test]
         public void a_plain_cbz_stays_cbz()
         {

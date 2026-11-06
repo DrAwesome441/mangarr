@@ -12,12 +12,15 @@ using NUnit.Framework;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.Download;
+using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.IndexerSearch;
 using NzbDrone.Core.IndexerSearch.Definitions;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MonthlyPacks;
 using NzbDrone.Core.Parser.Model;
+using NzbDrone.Core.Profiles.Delay;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Test.Framework;
 
@@ -613,6 +616,20 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             seriesCriteria.Should().BeEmpty();
         }
 
+        // Fan translations (2026-11-05): a fan copy is no volume yet, the chapter search still runs.
+        [Test]
+        public async Task a_series_query_for_a_volume_whose_only_file_is_a_fan_translation()
+        {
+            GivenChapterVolumes();
+            GivenEditionFiles(new BookFile { Id = 5, Quality = new QualityModel(Quality.CbzFanTranslation) });
+            WatchForSearchCriteria();
+            var seriesCriteria = WatchForAuthorSearchCriteria();
+
+            await Subject.BookSearch(_firstBook, MediaType.Archive, false, true, false);
+
+            seriesCriteria.Should().HaveCount(1);
+        }
+
         // A command over several volumes collects the volumes that want the series query and sends it
         // once, for all of them (BookSearchService).
         [Test]
@@ -736,6 +753,93 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<IMonthlyPackService>()
                 .Verify(s => s.Search(It.IsAny<IEnumerable<Book>>()), Times.Never());
+        }
+
+        // Fan translations (2026-11-05): a fan copy is not "found". The monthly-pack and chapter legs still run
+        // for a volume whose only approved result is a fan translation, and an official copy from either leg
+        // comes first.
+        private DownloadDecision Decision(string guid, Quality quality)
+        {
+            return new DownloadDecision(new RemoteBook
+            {
+                Author = _author,
+                Books = new List<Book> { _firstBook },
+                DownloadAllowed = true,
+                MediaType = MediaType.Archive,
+                ParsedBookInfo = new ParsedBookInfo { Quality = new QualityModel(quality) },
+                Release = new ReleaseInfo { Guid = guid, DownloadProtocol = DownloadProtocol.Usenet }
+            });
+        }
+
+        private DownloadDecision GivenVolumeSearchApprovesOnlyAFanTranslation()
+        {
+            var fan = Decision("fan", Quality.CbzFanTranslation);
+
+            Mocker.GetMock<IMakeDownloadDecision>()
+                .Setup(s => s.GetSearchDecision(It.IsAny<List<ReleaseInfo>>(), It.IsAny<BookSearchCriteria>()))
+                .Returns(new List<DownloadDecision> { fan });
+
+            return fan;
+        }
+
+        [Test]
+        public async Task a_volume_search_that_approves_only_a_fan_translation_still_runs_the_series_query_and_the_chapter_release_is_grabbed()
+        {
+            GivenChapterVolumes();
+            var fan = GivenVolumeSearchApprovesOnlyAFanTranslation();
+            var chapters = Decision("chapters", Quality.CbzChapters);
+            Mocker.GetMock<IMakeDownloadDecision>()
+                .Setup(s => s.GetSearchDecision(It.IsAny<List<ReleaseInfo>>(), It.IsAny<AuthorSearchCriteria>()))
+                .Returns(new List<DownloadDecision> { chapters });
+            WatchForSearchCriteria();
+            var seriesCriteria = WatchForAuthorSearchCriteria();
+
+            var decisions = await Subject.BookSearch(_firstBook, MediaType.Archive, false, true, false);
+
+            seriesCriteria.Should().HaveCount(1);
+            decisions.Should().Contain(fan).And.Contain(chapters);
+
+            // What the caller does with them: the official chapter release is grabbed, the fan copy is not.
+            var downloadService = new Mock<IDownloadService>();
+            var prioritizer = new DownloadDecisionPriorizationService(Mocker.GetMock<IConfigService>().Object, Mocker.GetMock<IDelayProfileService>().Object);
+            var processor = new ProcessDownloadDecisions(downloadService.Object, prioritizer, new Mock<IPendingReleaseService>().Object, TestLogger);
+
+            var processed = await processor.ProcessDecisions(decisions);
+
+            processed.Grabbed.Should().ContainSingle().Which.Should().BeSameAs(chapters);
+            downloadService.Verify(v => v.DownloadReport(fan.RemoteBook, It.IsAny<int?>()), Times.Never());
+        }
+
+        [Test]
+        public async Task a_volume_search_that_approves_only_a_fan_translation_still_tries_a_pack_and_drops_the_fan_copy_when_the_pack_takes_the_volume()
+        {
+            GivenChapterVolumes();
+            var fan = GivenVolumeSearchApprovesOnlyAFanTranslation();
+            Mocker.GetMock<IMonthlyPackService>()
+                .Setup(s => s.Search(It.IsAny<IEnumerable<Book>>()))
+                .Returns(new List<Book> { _firstBook });
+            WatchForSearchCriteria();
+            var seriesCriteria = WatchForAuthorSearchCriteria();
+
+            var decisions = await Subject.BookSearch(_firstBook, MediaType.Archive, false, true, false);
+
+            Mocker.GetMock<IMonthlyPackService>()
+                .Verify(s => s.Search(It.Is<IEnumerable<Book>>(b => b.Single() == _firstBook)), Times.Once());
+            decisions.Should().NotContain(fan);
+            seriesCriteria.Should().BeEmpty();
+        }
+
+        [Test]
+        public async Task a_deferred_volume_whose_only_approved_result_is_a_fan_translation_is_collected()
+        {
+            GivenChapterVolumes();
+            GivenVolumeSearchApprovesOnlyAFanTranslation();
+            WatchForSearchCriteria();
+            var deferred = new List<Book>();
+
+            await Subject.BookSearch(_firstBook, MediaType.Archive, false, true, false, true, deferred);
+
+            deferred.Should().ContainSingle().Which.Should().BeSameAs(_firstBook);
         }
 
         [Test]

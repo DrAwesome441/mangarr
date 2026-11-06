@@ -3,6 +3,30 @@
 Mangarr's user-facing changes, newest first. Each beta image also carries a build number
 (`10.0.0.N`, shown in System → Status); the release notes on GitHub give both.
 
+## 0.1.0-beta.5
+
+### Fan translations are treated as stand-ins (off by default)
+
+- **New quality: CBZ (fan translation).** It is the lowest grade and it is unticked in every profile,
+  so nothing changes unless you tick it. A release, folder or file marked `(Fan translation` gets it.
+- **A fan copy is a stand-in.** Any official copy replaces it automatically: a volume built from
+  official chapters, a volume from a monthly pack, or the full volume. This also happens in a profile
+  that does not allow upgrades. The order is: fan translation, then built from official chapters,
+  then the official volume.
+- Mangarr looks for official copies first and takes a fan copy last, and only once a volume has been
+  out for 14 days.
+- Mangarr downloads nothing from manga sites and ships no tool that does. A fan copy reaches it like
+  any other release: from an indexer and download client you add yourself, or as a file you import
+  by hand.
+- The volume page and the notifications say when a file is a fan translation.
+
+### Fixes
+
+- **A volume is built from chapters only when its chapter list is confirmed.** Some catalogue lists
+  held only a volume's first chapter, and Mangarr could take that one chapter for the whole volume.
+  A list is now used only when the list of the volume before or after it continues it without a gap
+  or an overlap.
+
 ## 0.1.0-beta.4
 
 ### Volumes built from chapters

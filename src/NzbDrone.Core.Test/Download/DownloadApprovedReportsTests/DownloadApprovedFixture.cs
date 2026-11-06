@@ -318,5 +318,45 @@ namespace NzbDrone.Core.Test.Download.DownloadApprovedReportsTests
             await Subject.ProcessDecisions(decisions);
             Mocker.GetMock<IDownloadService>().Verify(v => v.DownloadReport(It.IsAny<RemoteBook>(), null), Times.Once());
         }
+
+        // Fan translations (2026-11-05): with a delay profile the official release of a volume goes to pending;
+        // the fan copy of the same search must not be grabbed meanwhile. The comparer lists the official first.
+        [Test]
+        public async Task should_not_grab_a_fan_translation_while_an_official_release_of_the_volume_is_pending()
+        {
+            var volume = GetBook(1);
+            var official = GetRemoteBook(new List<Book> { volume }, new QualityModel(Quality.CBZ));
+            var fan = GetRemoteBook(new List<Book> { volume }, new QualityModel(Quality.CbzFanTranslation));
+
+            var decisions = new List<DownloadDecision>
+            {
+                new DownloadDecision(official, new Rejection("Waiting for the delay", RejectionType.Temporary)),
+                new DownloadDecision(fan)
+            };
+
+            var result = await Subject.ProcessDecisions(decisions);
+
+            Mocker.GetMock<IDownloadService>().Verify(v => v.DownloadReport(It.IsAny<RemoteBook>(), null), Times.Never());
+            result.Pending.Should().ContainSingle().Which.RemoteBook.Should().BeSameAs(official);
+        }
+
+        [Test]
+        public async Task should_grab_a_fan_translation_when_only_another_fan_copy_or_another_volume_is_pending()
+        {
+            var fanPending = GetRemoteBook(new List<Book> { GetBook(1) }, new QualityModel(Quality.CbzFanTranslation));
+            var otherVolume = GetRemoteBook(new List<Book> { GetBook(2) }, new QualityModel(Quality.CBZ));
+            var fan = GetRemoteBook(new List<Book> { GetBook(1) }, new QualityModel(Quality.CbzFanTranslation));
+
+            var decisions = new List<DownloadDecision>
+            {
+                new DownloadDecision(otherVolume, new Rejection("Waiting for the delay", RejectionType.Temporary)),
+                new DownloadDecision(fanPending, new Rejection("Waiting for the delay", RejectionType.Temporary)),
+                new DownloadDecision(fan)
+            };
+
+            await Subject.ProcessDecisions(decisions);
+
+            Mocker.GetMock<IDownloadService>().Verify(v => v.DownloadReport(fan, null), Times.Once());
+        }
     }
 }

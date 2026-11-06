@@ -1,5 +1,6 @@
 using System.Linq;
 using NLog;
+using NzbDrone.Common;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.DecisionEngine;
@@ -38,12 +39,20 @@ namespace NzbDrone.Core.MediaFiles.BookImport.Specifications
                 return Decision.Accept();
             }
 
+            // Fan translations (2026-11-05): a fan copy never replaces a file. The file already tracked at
+            // this very path is no other file (a rescan after ComicInfo was written into it).
+            if (item.Quality?.Quality == Quality.CbzFanTranslation &&
+                files.Any(f => f.Path == null || item.Path == null || !PathEqualityComparer.Instance.Equals(f.Path, item.Path)))
+            {
+                return Decision.Reject("A fan translation never replaces an existing file");
+            }
+
             var downloadPropersAndRepacks = _configService.DownloadPropersAndRepacks;
             var qualityComparer = new QualityModelComparer(item.Author.QualityProfileFor(item.Edition.MediaType));
 
             foreach (var bookFile in files)
             {
-                if (UpgradableSpecification.ReplacesChapterBuilt(bookFile.Quality, item.Quality))
+                if (UpgradableSpecification.ReplacesStandIn(bookFile.Quality, item.Quality))
                 {
                     continue;
                 }

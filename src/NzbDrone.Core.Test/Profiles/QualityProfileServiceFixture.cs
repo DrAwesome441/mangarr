@@ -56,6 +56,28 @@ namespace NzbDrone.Core.Test.Profiles
         }
 
         [Test]
+        public void default_manga_profile_lists_fan_translation_below_everything_and_not_allowed()
+        {
+            QualityProfile manga = null;
+            Mocker.GetMock<ICustomFormatService>()
+                .Setup(s => s.All())
+                .Returns(new List<CustomFormat>());
+            Mocker.GetMock<IProfileRepository>()
+                .Setup(s => s.Insert(It.Is<QualityProfile>(p => p.Name == "Manga")))
+                .Callback<QualityProfile>(p => manga = p)
+                .Returns<QualityProfile>(p => p);
+
+            Subject.Handle(new ApplicationStartedEvent());
+
+            manga.Should().NotBeNull();
+            var items = manga.Items;
+            var fan = items.Single(i => i.Quality?.Id == Quality.CbzFanTranslation.Id);
+            fan.Allowed.Should().BeFalse();
+            items.IndexOf(fan).Should().BeLessThan(items.FindIndex(i => i.Quality?.Id == Quality.CbzChapters.Id));
+            items.FindIndex(i => i.Allowed).Should().Be(items.FindIndex(i => i.Quality?.Id == Quality.CbzChapters.Id));
+        }
+
+        [Test]
         public void init_should_skip_when_every_default_profile_already_exists()
         {
             // A user who deleted or renamed a default on purpose must not get it back.

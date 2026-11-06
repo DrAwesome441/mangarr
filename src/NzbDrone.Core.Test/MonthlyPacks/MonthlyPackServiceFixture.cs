@@ -243,6 +243,16 @@ namespace NzbDrone.Core.Test.MonthlyPacks
         }
 
         [Test]
+        public void should_replace_a_fan_translation_like_a_chapter_built_one()
+        {
+            var fan = Volume("Sample Series", 16);
+            _files.Add(new BookFile { EditionId = 1000 + fan.Id, Quality = new QualityModel(Quality.CbzFanTranslation) });
+            Pack(File(fan));
+
+            Subject.Search(new[] { fan }).Should().BeEquivalentTo(new[] { fan });
+        }
+
+        [Test]
         public void should_skip_a_queued_volume()
         {
             var queued = Volume("Kaiju No. 8", 16);
@@ -251,6 +261,20 @@ namespace NzbDrone.Core.Test.MonthlyPacks
             Pack(File(queued), File(free));
 
             Subject.Search(new[] { queued, free }).Should().BeEquivalentTo(new[] { free });
+        }
+
+        // Fan translations (2026-11-05): a queued fan copy holds back no official volume; any other queued copy
+        // (CBZ (chapters) included) still does.
+        [Test]
+        public void should_take_a_volume_whose_queued_copy_is_a_fan_translation()
+        {
+            var fan = Volume("Sample Series", 16);
+            var built = Volume("Other Series", 4);
+            _queue.Add(new Queue.Queue { Book = fan, Quality = new QualityModel(Quality.CbzFanTranslation) });
+            _queue.Add(new Queue.Queue { Book = built, Quality = new QualityModel(Quality.CbzChapters) });
+            Pack(File(fan), File(built));
+
+            Subject.Search(new[] { fan, built }).Should().BeEquivalentTo(new[] { fan });
         }
 
         [Test]

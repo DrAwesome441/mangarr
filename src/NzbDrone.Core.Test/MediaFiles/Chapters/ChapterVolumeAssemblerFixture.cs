@@ -52,6 +52,9 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
             Mocker.GetMock<IEditionService>()
                 .Setup(s => s.GetEditionsByAuthor(3))
                 .Returns(() => _series.SelectMany(b => b.Editions.Value).ToList());
+            Mocker.GetMock<IBookService>()
+                .Setup(s => s.GetBooksByAuthor(3))
+                .Returns(() => _series.Select(b => new Book { Id = b.Id, VolumeNumber = b.VolumeNumber }).ToList());
         }
 
         [TearDown]
@@ -233,6 +236,20 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
             result.SkippedBooks.Should().Equal(Vol(9));
         }
 
+        // 2026-11-05: Vol. 10 starts at 85, not 82, so Vol. 9's list is not backed by its neighbour.
+        [Test]
+        public void a_volume_whose_list_does_not_adjoin_its_neighbour_is_skipped_with_a_reason()
+        {
+            _series[1] = Volume(10, 85, 90);
+            GivenChapters(72, 90);
+
+            var result = Subject.Assemble(_download, _author, new List<Book> { Vol(9) }, _work);
+
+            result.Volumes.Should().BeEmpty();
+            result.Skipped.Should().Equal("Vol. 9: the catalogue's chapter list for this volume is not confirmed by a neighbouring volume's list");
+            result.SkippedBooks.Should().Equal(Vol(9));
+        }
+
         [Test]
         public void pages_are_in_natural_number_order()
         {
@@ -377,7 +394,7 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
         {
             GivenChapters(72, 81);
 
-            var subject = new MiscountingAssembler(Mocker.GetMock<IDiskProvider>().Object, Mocker.GetMock<IEditionService>().Object, Mocker.GetMock<IMapCoversToLocal>().Object, Mocker.GetMock<ILocalizationService>().Object, TestLogger);
+            var subject = new MiscountingAssembler(Mocker.GetMock<IDiskProvider>().Object, Mocker.GetMock<IEditionService>().Object, Mocker.GetMock<IBookService>().Object, Mocker.GetMock<IMapCoversToLocal>().Object, Mocker.GetMock<ILocalizationService>().Object, TestLogger);
             var result = subject.Assemble(_download, _author, new List<Book> { Vol(9) }, _work);
 
             result.Volumes.Should().BeEmpty();
@@ -566,7 +583,7 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
 
         private RecordingAssembler Recording(bool throwOnRender = false)
         {
-            return new RecordingAssembler(Mocker.GetMock<IDiskProvider>().Object, Mocker.GetMock<IEditionService>().Object, Mocker.GetMock<IMapCoversToLocal>().Object, Mocker.GetMock<ILocalizationService>().Object, TestLogger) { Throw = throwOnRender };
+            return new RecordingAssembler(Mocker.GetMock<IDiskProvider>().Object, Mocker.GetMock<IEditionService>().Object, Mocker.GetMock<IBookService>().Object, Mocker.GetMock<IMapCoversToLocal>().Object, Mocker.GetMock<ILocalizationService>().Object, TestLogger) { Throw = throwOnRender };
         }
 
         [Test]
@@ -624,8 +641,8 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
 
         private class RecordingAssembler : ChapterVolumeAssembler
         {
-            public RecordingAssembler(IDiskProvider diskProvider, IEditionService editionService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, NLog.Logger logger)
-                : base(diskProvider, editionService, mediaCoverService, localizationService, logger)
+            public RecordingAssembler(IDiskProvider diskProvider, IEditionService editionService, IBookService bookService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, NLog.Logger logger)
+                : base(diskProvider, editionService, bookService, mediaCoverService, localizationService, logger)
             {
             }
 
@@ -647,8 +664,8 @@ namespace NzbDrone.Core.Test.MediaFiles.Chapters
 
         private class MiscountingAssembler : ChapterVolumeAssembler
         {
-            public MiscountingAssembler(IDiskProvider diskProvider, IEditionService editionService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, NLog.Logger logger)
-                : base(diskProvider, editionService, mediaCoverService, localizationService, logger)
+            public MiscountingAssembler(IDiskProvider diskProvider, IEditionService editionService, IBookService bookService, IMapCoversToLocal mediaCoverService, ILocalizationService localizationService, NLog.Logger logger)
+                : base(diskProvider, editionService, bookService, mediaCoverService, localizationService, logger)
             {
             }
 

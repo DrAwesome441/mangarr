@@ -122,6 +122,18 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
             remoteBook.MediaType.Should().Be(MediaType.Archive);
         }
 
+        // Fan translations (2026-11-05): a volume holding only a fan copy is still missing an official one.
+        [Test]
+        public void chapter_release_maps_to_a_volume_whose_only_file_is_a_fan_translation()
+        {
+            var fan = new BookFile { EditionId = 1, Quality = new QualityModel(Quality.CbzFanTranslation) };
+            Mocker.GetMock<IMediaFileService>().Setup(s => s.GetFilesByAuthor(_author.Id)).Returns(new List<BookFile> { fan });
+
+            var parsed = Parser.Parser.ParseBookTitleWithSearchCriteria(Title, _author, new List<Book>());
+
+            Subject.GetBooks(parsed, _author).Select(b => b.VolumeNumber).Should().Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        }
+
         [Test]
         public void chapter_range_maps_nothing_when_the_feature_is_off()
         {

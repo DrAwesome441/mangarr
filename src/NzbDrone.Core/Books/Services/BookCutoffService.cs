@@ -44,6 +44,12 @@ namespace NzbDrone.Core.Books
                     belowCutoffIds.Add(Quality.CbzChapters.Id);
                 }
 
+                // A fan translation is wanted until an official copy replaces it, allowed or not.
+                if (!belowCutoffIds.Contains(Quality.CbzFanTranslation.Id))
+                {
+                    belowCutoffIds.Add(Quality.CbzFanTranslation.Id);
+                }
+
                 if (belowCutoffIds.Any())
                 {
                     qualitiesBelowCutoff.Add(new QualitiesBelowCutoff(profile.Id, belowCutoffIds));

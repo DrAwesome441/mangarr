@@ -2170,6 +2170,9 @@
     "ServerRejectionEditionLanguageMissing": "このリリースには{language}の言語表示がありません（シリーズは{language}版です）",
     "ServerRejectionExistingFileEqualOrHigher": "ディスク上の既存ファイルは同等以上の優先度です：{quality}",
     "ServerRejectionExistingFilesMeetCutoff": "既存のファイルはすでにカットオフを満たしています：{quality}",
+    "ServerRejectionFanTranslationNeverReplaces": "ファン翻訳は既存のファイルを置き換えません",
+    "ServerRejectionFanTranslationNoReleaseDate": "ファン翻訳は発売済みの巻にのみ取得されますが、この巻には発売日がありません",
+    "ServerRejectionFanTranslationWaitDays": "ファン翻訳は巻の発売から {days} 日後にのみ取得されます",
     "ServerRejectionFullSeriesPack": "シリーズ全体のパックです",
     "ServerRejectionIndexerBlocked": "インデクサー {indexer} は失敗が続いたため {until} までブロックされています。リリースを取得できません。",
     "ServerRejectionLanguageChinese": "中国語",
@@ -2262,6 +2265,7 @@
     "ServerQueueChapterVolumeEndTitle": "第{volume}巻 終わり",
     "ServerQueueChapterVolumeMissing": "第{volume}巻: 第{chapter}話がありません",
     "ServerQueueChapterVolumeOverlap": "第{volume}巻: カタログ上で話が他の巻と重複しています",
+    "ServerQueueChapterVolumeUnadjoined": "第{volume}巻: カタログ上のこの巻の話の一覧が、隣の巻の一覧で確認できていません",
     "ServerQueueInvalidLocalPath": "[{path}] は有効なローカルパスではありません。リモートパスマッピングが必要な可能性があります。",
     "ServerQueueNoEligibleFiles": "{path} にインポート可能なファイルが見つかりません",
     "ServerQueueNoIntermediatePath": "ダウンロードに中間パスが含まれていないため、スキップします。",
@@ -2752,5 +2756,7 @@
     "PdfOriginalsFolderHelpText": "Original PDFs are moved here after they are converted to CBZ. Leave empty to use pdf-originals in Mangarr's app data folder. They can take a lot of space, so a folder on your large storage is a good choice. Use a dedicated empty folder: Mangarr marks it and refuses one that already holds files. Changing it does not move originals already kept.",
     "TaskNameCleanUpPdfOriginals": "PDF原本をクリーンアップ",
     "ServerProgressPdfOriginalsFolderUnusable": "PDF originals folder is not usable (check that it exists, is writable and is empty or already a Mangarr PDF originals folder); nothing was converted",
-    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries"
+    "ServerValidationInsideRootFolder": "Path '{path}' is inside a library root folder; keep PDF originals in their own folder outside your libraries",
+    "FanTranslation": "ファン翻訳",
+    "FanTranslationChapters": "ファン翻訳（第{first}–{last}話）"
 }

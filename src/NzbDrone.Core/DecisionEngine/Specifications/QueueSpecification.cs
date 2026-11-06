@@ -60,6 +60,14 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
                     continue;
                 }
 
+                // Fan translations (2026-11-05): a queued fan copy never blocks an official release; the
+                // official copy replaces it whatever the profile says.
+                if (remoteBook.ParsedBookInfo.Quality?.Quality == Quality.CbzFanTranslation &&
+                    UpgradableSpecification.ReplacesStandIn(remoteBook.ParsedBookInfo.Quality, subject.ParsedBookInfo.Quality))
+                {
+                    continue;
+                }
+
                 _logger.Debug("Checking if existing release in queue meets cutoff. Queued quality is: {0}", remoteBook.ParsedBookInfo.Quality);
 
                 var queuedItemCustomFormats = _formatService.ParseCustomFormat(remoteBook, (long)queueItem.Size);

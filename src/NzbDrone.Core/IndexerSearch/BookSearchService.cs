@@ -8,10 +8,12 @@ using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DecisionEngine;
+using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.MonthlyPacks;
+using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Queue;
 
 namespace NzbDrone.Core.IndexerSearch
@@ -82,6 +84,7 @@ namespace NzbDrone.Core.IndexerSearch
             var downloadedCount = 0;
             var grabbedBookIds = new HashSet<int>();
             var deferChapterSearch = new List<Book>();
+            var heldFanTranslations = new List<DownloadDecision>();
 
             foreach (var series in bySeries)
             {
@@ -103,7 +106,7 @@ namespace NzbDrone.Core.IndexerSearch
                     continue;
                 }
 
-                var processed = await _processDownloadDecisions.ProcessDecisions(decisions);
+                var processed = await _processDownloadDecisions.ProcessDecisions(HoldFanTranslations(decisions, heldFanTranslations));
 
                 downloadedCount += processed.Grabbed.Count;
                 grabbedBookIds.UnionWith(GrabbedBookIds(processed.Grabbed));
@@ -134,6 +137,8 @@ namespace NzbDrone.Core.IndexerSearch
                     var processed = await _processDownloadDecisions.ProcessDecisions(decisions);
 
                     downloadedCount += processed.Grabbed.Count;
+                    grabbedBookIds.UnionWith(GrabbedBookIds(processed.Grabbed));
+                    grabbedBookIds.UnionWith(GrabbedBookIds(processed.Pending));
                 }
                 catch (Exception ex)
                 {
@@ -141,12 +146,50 @@ namespace NzbDrone.Core.IndexerSearch
                 }
             }
 
+            downloadedCount += await ProcessHeldFanTranslations(heldFanTranslations, grabbedBookIds, packed);
+
             _logger.ProgressInfo("Completed search for {0} volume editions. {1} reports downloaded.", wanted.Count, downloadedCount);
         }
 
         private static IEnumerable<int> GrabbedBookIds(IEnumerable<DownloadDecision> grabbed)
         {
             return grabbed.SelectMany(d => d.RemoteBook?.Books ?? new List<Book>()).Select(b => b.Id);
+        }
+
+        // Fan translations (2026-11-05): a fan copy loses to every official release of the same run, the
+        // monthly pack and the chapter release included, which are separate queries made after the volume
+        // searches. Its approved or waiting decisions are held back from those searches' processing; the rest
+        // are returned.
+        private static List<DownloadDecision> HoldFanTranslations(List<DownloadDecision> decisions, List<DownloadDecision> held)
+        {
+            var fan = decisions.Where(d => (d.Approved || d.TemporarilyRejected) && FanTranslationSpecification.IsFanTranslation(d)).ToList();
+
+            if (fan.Count == 0)
+            {
+                return decisions;
+            }
+
+            held.AddRange(fan);
+
+            return decisions.Where(d => !fan.Contains(d)).ToList();
+        }
+
+        // ...and processed once every official leg has run, for the volumes none of them took (grabbed,
+        // pending or packed). Returns the number grabbed.
+        private async Task<int> ProcessHeldFanTranslations(List<DownloadDecision> held, HashSet<int> taken, HashSet<int> packed)
+        {
+            var open = held
+                .Where(d => !(d.RemoteBook?.Books ?? new List<Book>()).Any(b => taken.Contains(b.Id) || packed.Contains(b.Id)))
+                .ToList();
+
+            if (open.Count == 0)
+            {
+                return 0;
+            }
+
+            var processed = await _processDownloadDecisions.ProcessDecisions(open);
+
+            return processed.Grabbed.Count;
         }
 
         public void Execute(BookSearchCommand message)
@@ -167,6 +210,10 @@ namespace NzbDrone.Core.IndexerSearch
             // Monthly volume packs (2026-10-21): the volumes nothing was found for are offered to one pack query
             // for the whole command, before the chapter queries.
             var packCandidateIds = new List<int>();
+
+            // Fan translations (2026-11-05): fan decisions wait for the pack and chapter queries (below).
+            var heldFanTranslations = new List<DownloadDecision>();
+            var taken = new HashSet<int>();
 
             foreach (var bookId in message.BookIds.Distinct())
             {
@@ -193,11 +240,15 @@ namespace NzbDrone.Core.IndexerSearch
                     : deferChapterSearch != null
                         ? _releaseSearchService.BookSearch(bookId, false, manual, false, deferChapterSearch).GetAwaiter().GetResult()
                         : _releaseSearchService.BookSearch(bookId, false, manual, false).GetAwaiter().GetResult();
-                var processed = _processDownloadDecisions.ProcessDecisions(decisions).GetAwaiter().GetResult();
+                var processed = _processDownloadDecisions.ProcessDecisions(HoldFanTranslations(decisions, heldFanTranslations)).GetAwaiter().GetResult();
 
+                taken.UnionWith(GrabbedBookIds(processed.Grabbed));
+                taken.UnionWith(GrabbedBookIds(processed.Pending));
                 _logger.ProgressInfo("Volume search completed. {0} reports downloaded.", processed.Grabbed.Count);
 
-                if (deferChapterSearch != null && !message.MediaType.HasValue && !decisions.Any(d => d.Approved || d.TemporarilyRejected))
+                // A fan result is not "found" (2026-11-05): the volume still goes to the pack query.
+                if (deferChapterSearch != null && !message.MediaType.HasValue &&
+                    !decisions.Any(d => (d.Approved || d.TemporarilyRejected) && !FanTranslationSpecification.IsFanTranslation(d)))
                 {
                     packCandidateIds.Add(bookId);
                 }
@@ -212,7 +263,16 @@ namespace NzbDrone.Core.IndexerSearch
                 var decisions = _releaseSearchService.ChapterSearch(series.ToList(), manual, false).GetAwaiter().GetResult();
                 var processed = _processDownloadDecisions.ProcessDecisions(decisions).GetAwaiter().GetResult();
 
+                taken.UnionWith(GrabbedBookIds(processed.Grabbed));
+                taken.UnionWith(GrabbedBookIds(processed.Pending));
                 _logger.ProgressInfo("Volume search completed. {0} reports downloaded.", processed.Grabbed.Count);
+            }
+
+            var fanGrabbed = ProcessHeldFanTranslations(heldFanTranslations, taken, packed).GetAwaiter().GetResult();
+
+            if (fanGrabbed > 0)
+            {
+                _logger.ProgressInfo("Volume search completed. {0} reports downloaded.", fanGrabbed);
             }
         }
 
@@ -384,11 +444,12 @@ namespace NzbDrone.Core.IndexerSearch
         }
 
         // (volume, media type) pairs already in the queue: a downloading EPUB must not stop the
-        // audiobook search of the same volume. Manga queue rows are Archive.
+        // audiobook search of the same volume. Manga queue rows are Archive. A queued fan copy
+        // (2026-11-05) does not stop the search for the official volume.
         private HashSet<(int BookId, MediaType MediaType)> QueuedEditions()
         {
             return _queueService.GetQueue()
-                .Where(q => q.Book != null)
+                .Where(q => q.Book != null && q.Quality?.Quality != Quality.CbzFanTranslation)
                 .Select(q => (q.Book.Id, q.RemoteBook?.MediaType ?? MediaType.Archive))
                 .ToHashSet();
         }

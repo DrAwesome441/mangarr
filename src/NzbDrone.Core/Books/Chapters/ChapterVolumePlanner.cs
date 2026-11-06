@@ -18,7 +18,8 @@ namespace NzbDrone.Core.Books.Chapters
     // A volume counts only when its own edition lists its chapters and every whole one is available;
     // a half chapter (n.5) is never required: when available it goes where an edition lists it, else
     // after chapter n. Nothing is borrowed from another edition and nothing is inferred; volumes whose
-    // lists share a whole chapter (a catalogue error) are never planned.
+    // lists share a whole chapter (a catalogue error) are never planned; nor is a volume whose list does
+    // not adjoin a listed neighbour's (2026-11-05: a first-chapter-only list is not the whole volume).
     public static class ChapterVolumePlanner
     {
         public static List<PlannedVolume> Plan(IReadOnlyCollection<double> available, IEnumerable<Book> books, MediaType mediaType)
@@ -33,14 +34,15 @@ namespace NzbDrone.Core.Books.Chapters
                 .Where(c => !IsWhole(c))
                 .Select(Key));
             var unlistedHalves = available.Where(c => !IsWhole(c) && !listedHalves.Contains(Key(c))).ToList();
-            var overlapping = Overlapping(bookList, mediaType);
+            var untrusted = Overlapping(bookList, mediaType);
+            untrusted.UnionWith(Unadjoined(bookList, mediaType));
             var result = new List<PlannedVolume>();
 
             foreach (var book in bookList)
             {
                 var listed = book.EditionOf(mediaType)?.Chapters;
 
-                if (listed == null || listed.Count == 0 || overlapping.Contains(book.Id))
+                if (listed == null || listed.Count == 0 || untrusted.Contains(book.Id))
                 {
                     continue;
                 }
@@ -111,6 +113,73 @@ namespace NzbDrone.Core.Books.Chapters
                 .Where(g => g.Select(x => x.Book).Distinct().Count() > 1)
                 .SelectMany(g => g.Select(x => x.Book))
                 .ToHashSet();
+        }
+
+        // Volumes (book ids) whose list is not backed by a neighbour (2026-11-05): about 17% of catalogue
+        // lists hold only the volume's first chapter, and such a list says nothing of the rest. A list
+        // is trusted only when the volume next to it (N-1 / N+1, same series, listing a whole chapter)
+        // starts or ends right beside it and no neighbour contradicts it. No neighbour = not trusted.
+        // A list of one whole chapter always has the right start, so only the NEXT volume can confirm
+        // it. Whole chapters must run unbroken; a list with a hole is refused and its end confirms no
+        // one (its start still can). A volume number held by two listed books is ambiguous: neither is
+        // trusted and neither is anyone's neighbour. A volume number that is zero, negative or fractional
+        // cannot be confirmed, so such a volume is refused and is nobody's neighbour; neither is a
+        // volume whose list overlaps another's. Nothing is inferred from a neighbour.
+        public static HashSet<int> Unadjoined(IEnumerable<Book> books, MediaType mediaType)
+        {
+            var bookList = books.ToList();
+            var overlapping = Overlapping(bookList, mediaType);
+            var listed = bookList
+                .Select(b => (Book: b, Whole: (b.EditionOf(mediaType)?.Chapters ?? new List<double>()).Where(IsWhole).Distinct().OrderBy(c => c).ToList()))
+                .Where(x => x.Whole.Count > 0)
+                .ToList();
+            var result = new HashSet<int>();
+
+            // A zero, negative or fractional volume number cannot be confirmed by a neighbour (2026-11-05).
+            result.UnionWith(listed.Where(x => x.Book.VolumeNumber <= 0 || !IsWhole(x.Book.VolumeNumber)).Select(x => x.Book.Id));
+
+            // A volume whose list overlaps another's confirms no one.
+            var entries = listed
+                .Where(x => x.Book.VolumeNumber > 0 && IsWhole(x.Book.VolumeNumber) && !overlapping.Contains(x.Book.Id))
+                .ToList();
+            var spans = new Dictionary<double, (double First, double Last, bool Unbroken, int BookId)>();
+
+            foreach (var group in entries.GroupBy(x => x.Book.VolumeNumber))
+            {
+                if (group.Select(x => x.Book.Id).Distinct().Count() > 1)
+                {
+                    result.UnionWith(group.Select(x => x.Book.Id));
+                    continue;
+                }
+
+                var whole = group.First().Whole;
+                spans[group.Key] = (whole.First(), whole.Last(), whole.Zip(whole.Skip(1), (x, y) => y - x).All(d => d == 1), group.First().Book.Id);
+            }
+
+            foreach (var span in spans)
+            {
+                var number = span.Key;
+                var mine = span.Value;
+
+                if (!mine.Unbroken)
+                {
+                    result.Add(mine.BookId);
+                    continue;
+                }
+
+                var hasPrevious = spans.TryGetValue(number - 1, out var previous);
+                var hasNext = spans.TryGetValue(number + 1, out var next);
+                var previousAdjoins = hasPrevious && previous.Unbroken && previous.Last + 1 == mine.First;
+                var nextAdjoins = hasNext && mine.Last + 1 == next.First;
+                var single = mine.First == mine.Last;
+
+                if ((!hasPrevious && !hasNext) || (hasPrevious && !previousAdjoins) || (hasNext && !nextAdjoins) || (single && !nextAdjoins))
+                {
+                    result.Add(mine.BookId);
+                }
+            }
+
+            return result;
         }
 
         public static bool IsEnabled(Author author, IConfigService config)

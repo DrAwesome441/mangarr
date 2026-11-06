@@ -70,6 +70,32 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
                   });
         }
 
+        // Fan translations (2026-11-05): an official release always ranks first, even on a profile that
+        // ranks the fan quality higher, and whatever the protocol and indexer priority say.
+        [Test]
+        public void an_official_release_beats_a_fan_translation_even_when_the_profile_ranks_fan_higher()
+        {
+            var fan = GivenRemoteBook(new List<Book> { GivenBook(1) }, new QualityModel(Quality.CbzFanTranslation), downloadProtocol: DownloadProtocol.Usenet, indexerPriority: 1);
+            var official = GivenRemoteBook(new List<Book> { GivenBook(1) }, new QualityModel(Quality.CBZ), downloadProtocol: DownloadProtocol.Torrent, indexerPriority: 50);
+
+            foreach (var remoteBook in new[] { fan, official })
+            {
+                remoteBook.Author.QualityProfile = new QualityProfile
+                {
+                    Items = new List<QualityProfileQualityItem>
+                    {
+                        new QualityProfileQualityItem { Quality = Quality.CBZ, Allowed = true },
+                        new QualityProfileQualityItem { Quality = Quality.CbzFanTranslation, Allowed = true }
+                    }
+                };
+            }
+
+            var decisions = new List<DownloadDecision> { new DownloadDecision(fan), new DownloadDecision(official) };
+
+            Subject.PrioritizeDecisions(decisions).First().RemoteBook.ParsedBookInfo.Quality.Quality.Should().Be(Quality.CBZ);
+            Subject.PrioritizeDecisions(Enumerable.Reverse(decisions).ToList()).First().RemoteBook.ParsedBookInfo.Quality.Quality.Should().Be(Quality.CBZ);
+        }
+
         [Test]
         public void should_put_reals_before_non_reals()
         {
