@@ -441,7 +441,7 @@ namespace NzbDrone.Core.MediaFiles.Chapters
         // macOS debris: AppleDouble "._name" files (often .jpg- or .cbz-named, a few KB) and the __MACOSX folder
         // they usually sit in, at any depth -- inside a chapter archive or in the download folder itself. Never a
         // page, never a chapter.
-        private static bool IsMacMetadata(string entryName)
+        internal static bool IsMacMetadata(string entryName)
         {
             var parts = entryName.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 

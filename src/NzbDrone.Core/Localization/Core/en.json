@@ -1784,6 +1784,7 @@
   "ServerImportFailedRootFolderMissing": "Failed to import book, root folder missing.",
   "ServerImportFailedToAddSeries": "Failed to add missing series",
   "ServerImportFailedToAddVolume": "Failed to add missing volume",
+  "ServerImportFewerPagesThanCatalogue": "Holds {pages} pages; the catalogue lists {listed} for this volume",
   "ServerImportFileLocked": "Locked file, try again later",
   "ServerImportFolderNotInRootFolder": "Destination folder {path} is not in a Root Folder",
   "ServerImportMatchNotCloseEnough": "Volume match is not close enough: {match} vs {threshold} {reasons}",

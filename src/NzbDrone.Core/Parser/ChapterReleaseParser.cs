@@ -16,7 +16,7 @@ namespace NzbDrone.Core.Parser
         // "c001", "c001-073", "Ch. 12", "Chapter 12", "Chapters 1-73", "c073.5"; an end may repeat the token ("c001-c073").
         // A bare "c" right after "(" is a Comiket tag ("(C102)"), never a chapter.
         private static readonly Regex EnglishChapterRegex = new Regex(
-            @"(?<![\p{L}\p{N}])(?:chapters|chapter|chap|chs|ch|(?<!\()c)\.?\s*(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*[\p{Pd}~]\s*(?:(?:chapters|chapter|chap|chs|ch|c)\.?\s*)?(?<e>\d{1,4}(?:\.\d{1,2})?))?(?![\p{L}\p{N}])",
+            @"(?<![\p{L}\p{N}])(?:chapters|chapter|chap|chs|ch|(?<!\()c)\.?\s*(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*[\p{Pd}~]\s*(?:(?:chapters|chapter|chap|chs|ch|c)\.?\s*)?(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?(?![\p{L}\p{N}])",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Official = "(Digital)"; a scan / scans / scanlation marker is fan work even beside it.

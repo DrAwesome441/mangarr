@@ -2763,5 +2763,6 @@
     "FanTranslationChapters": "Fanübersetzung, Kapitel {first}–{last}",
     "ChapterSingle": "Kapitel {chapter}",
     "Chapters": "Kapitel",
-    "ChaptersRange": "Kapitel {first}–{last}"
+    "ChaptersRange": "Kapitel {first}–{last}",
+    "ServerImportFewerPagesThanCatalogue": "Enthält {pages} Seiten; der Katalog nennt {listed} für diesen Band"
 }

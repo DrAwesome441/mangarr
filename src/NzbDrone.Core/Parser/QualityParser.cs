@@ -73,6 +73,15 @@ namespace NzbDrone.Core.Parser
             @"\[(?:stick|lucaz)\]",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        // Scene eBook releases tagged HYBRiD ("VIZ.Media.-.Series.Vol.9.Title.2011.HYBRiD.COMiC.eBook-GROUP",
+        // "Series.Vol.06.Manga.2022.Hybrid.Comic.eBook") are PDFs: the scene's HYBRiD is a PDF with both
+        // a text and an image layer. Graded PDF here, not the manga default CBZ, or a CBR library grabs
+        // them as upgrades (twelve volumes of one series, 2026-11-08) and import then refuses every one as not
+        // an upgrade. Read as the whole "hybrid … ebook" phrase: a title word ("Hybrid x Heart") is not it.
+        private static readonly Regex HybridEbookRegex = new Regex(
+            @"\bhybrid[. _-]+(?:comics?[. _-]+)?e-?book\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
         // The "(Digital)" tag of digital manga rips ("Series v03 (2022) (Digital) (danke-Empire)").
         private static readonly Regex DigitalTagRegex = new Regex(
             @"\(digital\)",
@@ -284,6 +293,10 @@ namespace NzbDrone.Core.Parser
                 else if (LightNovelWordingRegex.IsMatch(name))
                 {
                     result.Quality = Quality.EPUB;
+                }
+                else if (HybridEbookRegex.IsMatch(name))
+                {
+                    result.Quality = Quality.PDF;
                 }
                 else
                 {

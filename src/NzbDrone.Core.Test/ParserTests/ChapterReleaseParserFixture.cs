@@ -42,9 +42,22 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("Series v05 (Digital)", "Series")]
         [TestCase("Re ZERO Starting Life in Another World Chapter 4 The Sanctuary and the Witch of Greed (Digital)", "Re:ZERO -Starting Life in Another World- Chapter 4: The Sanctuary and the Witch of Greed")]
         [TestCase("Series (C102) (Digital)", "Series")]
+        [TestCase("Series Chapter １２ (Digital)", "Series")]
+        [TestCase("Series c００１-０４２ (Digital)", "Series")]
+        [TestCase("Series Ch. ١٢ (Digital)", "Series")]
         public void not_a_chapter_release(string title, string series)
         {
             ChapterReleaseParser.ParseTitle(title, series, NoAliases, "en").Should().BeNull();
+        }
+
+        // A market's chapter token with digits of another script names no chapter either (the
+        // invariant number parse cannot read them; the title must not fail the whole parse).
+        [TestCase("シリーズ 第１２話 (Digital)", "シリーズ", "ja")]
+        [TestCase("Série Chapitre １２ (Digital)", "Série", "fr")]
+        [TestCase("시리즈 １２화 (Digital)", "시리즈", "ko")]
+        public void other_script_digits_are_not_a_chapter(string title, string series, string language)
+        {
+            ChapterReleaseParser.ParseTitle(title, series, NoAliases, language).Should().BeNull();
         }
 
         // A market's own volume token is never a chapter.

@@ -3,6 +3,38 @@
 Mangarr's user-facing changes, newest first. Each beta image also carries a build number
 (`10.0.0.N`, shown in System → Status); the release notes on GitHub give both.
 
+## 0.1.0-beta.7
+
+### Fixes
+
+- **Scene "HYBRiD … eBook" releases are read as PDFs.** Their names say nothing about the format, so
+  they were graded CBZ, and a profile whose cutoff is CBZ took them every week as upgrades for CBR
+  volumes; the files then arrived as PDFs and were refused at import. They now grade PDF from the
+  name and are only taken where PDF is wanted. The real file type is still checked at import.
+- **A cut-down volume file is refused.** A volume holding under two thirds of the pages the catalogue
+  lists for it is refused: "Holds 112 pages; the catalogue lists 192 for this volume". Nothing is
+  refused when the count is unknown (no catalogue count, an archive that cannot be read, a `.cbr`, a
+  volume built from chapters, a light novel). Manual import can still take the file.
+- **A number in another script no longer stops a release from being read.** A volume or chapter
+  number written in full-width or Arabic-Indic digits used to throw an error. Such a title now names
+  no volume and no chapter, and the rest of the release name is read as before.
+- **A monthly pack already in your torrent client no longer raises a warning every day.** Mangarr
+  never touches a torrent it did not add. When the pack that holds a wanted volume is already in the
+  client, the log notes it and gives the choice: remove that torrent so Mangarr can grab the pack, or
+  import the volumes by hand.
+
+### Metadata
+
+- **ComicInfo carries a volume's own title.** Where the catalogue has one, the `<Title>` field reads
+  `<Series>: <title> (Vol. N)`. The metadata embed rewrites the archives of titled volumes at its next
+  pass.
+
+### Catalogue
+
+- opentome-2026-11-08: English volumes with a confirmed chapter list went from 10,917 to 11,112.
+  German editions keep their ids when the national library re-keys a record, and a new edition line
+  is named with its edition ("– Perfect Edition").
+
 ## 0.1.0-beta.6
 
 ### Volume titles and chapters

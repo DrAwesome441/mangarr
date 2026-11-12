@@ -134,7 +134,9 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         private static ParsedBookInfo ParsedFromTitle(string title)
         {
             var parsed = new ParsedBookInfo { ReleaseTitle = title, Quality = QualityParser.ParseQuality(title) };
-            parsed.Quality.Quality.Should().Be(Quality.CBZ, "the manga volume-token default is the input under test");
+            // CBZ by the volume-token default; PDF for the "Hybrid.Comic.eBook" scene tag (2026-11-10) -- the
+            // manga archive class either way, which is the input under test.
+            MediaTypes.OfQuality(parsed.Quality.Quality).Should().Be(MediaType.Archive, "a manga archive grade is the input under test");
 
             return parsed;
         }
@@ -307,19 +309,21 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         // The 2026-09-18 grab: "Vol.06" is a volume token, so the manga-named release graded CBZ and
         // the light-novel re-grade turned it into an EPUB grab (History recorded quality 6). Manga
         // wording keeps the archive grade, so the media-type spec refuses it for a light novel.
+        // Since 2026-11-10 the "Hybrid.Comic.eBook" scene tag grades the release PDF (what such a
+        // file is); still the archive class, still not re-graded, still refused.
         [Test]
         public void manga_named_volume_title_is_not_regraded_for_a_light_novel_author()
         {
             var parsed = ParsedFromTitle(MangaNamedRelease);
 
             ParsingService.RegradeForLibrary(parsed, MangaNamedRelease, LightNovel(), new BookSearchCriteria { MediaType = MediaType.Ebook }, new List<int> { 7020 }).Should().BeFalse();
-            parsed.Quality.Quality.Should().Be(Quality.CBZ);
+            parsed.Quality.Quality.Should().Be(Quality.PDF);
             ParsingService.ResolveMediaType(parsed, LightNovel(), new BookSearchCriteria { MediaType = MediaType.Ebook }, MangaNamedRelease).Should().Be(MediaType.Archive);
 
             // An audio search agrees.
             parsed = ParsedFromTitle(MangaNamedRelease);
             ParsingService.RegradeForLibrary(parsed, MangaNamedRelease, LightNovel(), new AuthorSearchCriteria { MediaType = MediaType.Audio }, null).Should().BeFalse();
-            parsed.Quality.Quality.Should().Be(Quality.CBZ);
+            parsed.Quality.Quality.Should().Be(Quality.PDF);
         }
 
         [Test]

@@ -21,12 +21,12 @@ namespace NzbDrone.Core.Parser
 
         // "Volumes 1 to 13", "Books 1 to 13"
         private static readonly Regex VolRangeToRegex = new Regex(
-            @"\b(?:volumes?|books?)\s+(?<start>\d{1,3})\s+to\s+(?<end>\d{1,3})\b",
+            @"\b(?:volumes?|books?)\s+(?<start>[0-9]{1,3})\s+to\s+(?<end>[0-9]{1,3})\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // "Vol. 1-13", "v01-v13", "Volumes 1-13", "Books 1-13" (any Unicode dash: en/em dash, horizontal bar)
         private static readonly Regex VolRangeDashRegex = new Regex(
-            @"\b(?:v|vol\.?|volume|book)s?\.?\s*(?<start>\d{1,3})\s*\p{Pd}\s*(?:(?:v|vol\.?)\s*)?(?<end>\d{1,3})\b",
+            @"\b(?:v|vol\.?|volume|book)s?\.?\s*(?<start>[0-9]{1,3})\s*\p{Pd}\s*(?:(?:v|vol\.?)\s*)?(?<end>[0-9]{1,3})\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // "v01", "Vol. 5", "Volume 12", "Vol. 3.5" (fractional side-story volumes), "Book 4".
@@ -35,12 +35,12 @@ namespace NzbDrone.Core.Parser
         // Fraction capped at 2 digits: scene eBook names are fully dotted ("Vol.05.2017.Hybrid"),
         // and an unbounded fraction swallowed the year as "volume 5.2017".
         private static readonly Regex VolSingleRegex = new Regex(
-            @"\b(?:v|vol\.?|volume|book)\s*\.?\s*(?<num>\d{1,3}(?:\.\d{1,2})?)\b",
+            @"\b(?:v|vol\.?|volume|book)\s*\.?\s*(?<num>[0-9]{1,3}(?:\.[0-9]{1,2})?)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Japanese: 第N巻 (volume N). Run before punctuation normalization strips 巻.
         private static readonly Regex VolCjkRegex = new Regex(
-            @"第\s*(?<num>\d{1,3}(?:\.\d+)?)\s*巻",
+            @"第\s*(?<num>[0-9]{1,3}(?:\.[0-9]+)?)\s*巻",
             RegexOptions.Compiled);
 
         // Publisher/format parentheticals — "(Light Novel)", "(Digital)", "(Omnibus)", "(comic)".
@@ -61,10 +61,13 @@ namespace NzbDrone.Core.Parser
         // Explicit chapter tokens in a FILE name: "Chapter 12", "Ch.12", "ch 012", "c001",
         // "#12", 第N話. Used only by IsChapterOnlyFile — never by volume parsing.
         private static readonly Regex ChapterTokenRegex = new Regex(
-            @"(?:\b(?:c(?:h(?:ap(?:ter)?)?)?)[ ._-]*(?<num>\d{1,4}(?:\.\d{1,2})?)\b)|(?:#(?<num>\d{1,4})\b)|(?:第\s*\d{1,4}\s*話)",
+            @"(?:\b(?:c(?:h(?:ap(?:ter)?)?)?)[ ._-]*(?<num>[0-9]{1,4}(?:\.[0-9]{1,2})?)\b)|(?:#(?<num>[0-9]{1,4})\b)|(?:第\s*[0-9]{1,4}\s*話)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Volume numbers are culture-invariant: "3.5" is always three-and-a-half, never "thirty-five".
+        // The token patterns above capture ASCII digits only ([0-9], never \d): \d also matches the
+        // digits of other scripts (full-width １４, Arabic-Indic ١٤), which this parse refuses with an
+        // exception. Such a title names no volume (fails closed) instead of failing the whole parse.
         private static double ParseNum(string value) => double.Parse(value, CultureInfo.InvariantCulture);
 
         // Render a volume number back to its canonical string: whole numbers drop the

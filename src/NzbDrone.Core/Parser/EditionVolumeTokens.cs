@@ -46,11 +46,11 @@ namespace NzbDrone.Core.Parser
         // Volumes built from chapter packs (2026-10-21): a market's own chapter token, read beside the English
         // "c001" / "Ch." / "Chapter" by ChapterReleaseParser -- "Chapitre 12", "Kapitel 12", "第12話", "12화", "第12话" /
         // "第12回", each with a range form ("Chapitres 1-12", "第1-12話"). Same groups as the English token (s, e).
-        private static readonly Regex FrChapter = new Regex(@"\bChapitres?\s*\.?\s*(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*(?:à|a|-|\p{Pd})\s*(?:Chapitres?\s*\.?\s*)?(?<e>\d{1,4}(?:\.\d{1,2})?))?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex DeChapter = new Regex(@"\bKapitel\s*\.?\s*(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*(?:bis|-|\p{Pd})\s*(?:Kapitel\s*\.?\s*)?(?<e>\d{1,4}(?:\.\d{1,2})?))?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex JaChapter = new Regex(@"第\s*(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*[\p{Pd}～〜]\s*(?<e>\d{1,4}(?:\.\d{1,2})?))?\s*話", RegexOptions.Compiled);
-        private static readonly Regex KoChapter = new Regex(@"(?:제\s*)?(?<![\d.])(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*[\p{Pd}~～〜]\s*(?<e>\d{1,4}(?:\.\d{1,2})?))?\s*화", RegexOptions.Compiled);
-        private static readonly Regex ZhChapter = new Regex(@"第\s*(?<s>\d{1,4}(?:\.\d{1,2})?)(?:\s*[\p{Pd}~～〜]\s*(?<e>\d{1,4}(?:\.\d{1,2})?))?\s*[话話回]", RegexOptions.Compiled);
+        private static readonly Regex FrChapter = new Regex(@"\bChapitres?\s*\.?\s*(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*(?:à|a|-|\p{Pd})\s*(?:Chapitres?\s*\.?\s*)?(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex DeChapter = new Regex(@"\bKapitel\s*\.?\s*(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*(?:bis|-|\p{Pd})\s*(?:Kapitel\s*\.?\s*)?(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex JaChapter = new Regex(@"第\s*(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*[\p{Pd}～〜]\s*(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?\s*話", RegexOptions.Compiled);
+        private static readonly Regex KoChapter = new Regex(@"(?:제\s*)?(?<![[0-9].])(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*[\p{Pd}~～〜]\s*(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?\s*화", RegexOptions.Compiled);
+        private static readonly Regex ZhChapter = new Regex(@"第\s*(?<s>[0-9]{1,4}(?:\.[0-9]{1,2})?)(?:\s*[\p{Pd}~～〜]\s*(?<e>[0-9]{1,4}(?:\.[0-9]{1,2})?))?\s*[话話回]", RegexOptions.Compiled);
 
         // Preferred Edition (2026-09-24, ruling A9): box sets ("Coffret", "Box Set") are collected releases too;
         // fix round 1: so is Carlsen's "Massiv".

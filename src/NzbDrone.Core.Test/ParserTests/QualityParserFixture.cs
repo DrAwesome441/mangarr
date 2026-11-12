@@ -84,6 +84,25 @@ namespace NzbDrone.Core.Test.ParserTests
             ParseAndVerifyQuality(title, null, 0, Quality.CBR);
         }
 
+        // A scene eBook release tagged HYBRiD is a PDF (text + image layer), not the manga default:
+        // graded CBZ, a CBR library grabbed twelve of them as upgrades and import refused each one.
+        [TestCase("VIZ.Media.-.Sample.Saga.Vol.9.Contact.2011.HYBRiD.COMiC.eBook-PRiNTER-xpost")]
+        [TestCase("VIZ.Media-Sample.Saga.Vol.3.Hard.Run.2011.HYBRiD.COMiC.eBook-PRiNTER")]
+        [TestCase("Sample.Saga.Vol.06.Manga.2022.Hybrid.Comic.eBook-GROUP")]
+        [TestCase("Sample Saga Vol. 2 (2019) HYBRID eBook")]
+        public void should_grade_hybrid_scene_ebook_as_pdf(string title)
+        {
+            ParseAndVerifyQuality(title, null, 0, Quality.PDF);
+        }
+
+        // "Hybrid" as a word of the title is not the scene tag.
+        [TestCase("Hybrid x Heart Magias Academy Ataraxia Vol. 5 (2016) (Digital)")]
+        [TestCase("Sample Hybrid Saga v03 (2022) (Digital) (danke-Empire)")]
+        public void should_not_read_a_hybrid_title_word_as_pdf(string title)
+        {
+            ParseAndVerifyQuality(title, null, 0, Quality.CBZ);
+        }
+
         // A non-manga release with no quality token and no volume token stays Unknown.
         [TestCase("Some Random Audiobook Without Format Tag (2016)")]
         public void should_not_default_non_manga_to_cbz(string title)

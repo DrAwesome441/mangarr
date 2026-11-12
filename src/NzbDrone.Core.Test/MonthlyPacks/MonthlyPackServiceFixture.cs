@@ -12,6 +12,7 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Download.Clients;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.History;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Torznab;
@@ -526,6 +527,21 @@ namespace NzbDrone.Core.Test.MonthlyPacks
 
             Subject.Search(new[] { book }).Should().BeEmpty();
             ExceptionVerification.ExpectedWarns(1);
+        }
+
+        [Test]
+        public void should_leave_a_pack_the_client_already_holds_without_a_warning()
+        {
+            // The pack torrent sits in the client but Mangarr never grabbed it (added by hand or by another
+            // app). Mangarr leaves it alone by design; saying so every run is an Info line, not a warning.
+            var book = Volume("Sample Saga", 16);
+            var release = Pack(File(book));
+            Mocker.GetMock<IDownloadService>()
+                .Setup(s => s.DownloadReport(It.IsAny<RemoteBook>(), It.IsAny<int?>()))
+                .ThrowsAsync(new DownloadClientRejectedReleaseException(release, "qBittorrent already has this torrent (ABCDEF0001) — added outside Mangarr, so it is not tracked here"));
+
+            Subject.Search(new[] { book }).Should().BeEmpty();
+            ExceptionVerification.ExpectedWarns(0);
         }
 
         [Test]

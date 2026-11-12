@@ -57,6 +57,11 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("Author Name - A Novel")]
         [TestCase("The Manga Cookbook 2 (2020)")]
         [TestCase("Booklet 5 of the Collection")]
+        [TestCase("Sample Saga Vol.１４ (Digital)")]
+        [TestCase("Sample Saga v０１-０５ (Digital)")]
+        [TestCase("Sample Saga Volumes １ to ５")]
+        [TestCase("Sample Saga 第１４巻")]
+        [TestCase("Sample Saga Vol. ١٤")]
         public void should_leave_volume_null_when_absent(string title)
         {
             var info = Parse(title);
@@ -84,6 +89,8 @@ namespace NzbDrone.Core.Test.ParserTests
 
         [TestCase("Some Random Book Title")]
         [TestCase("Author Name - A Novel")]
+        [TestCase("Sample Saga v１４.cbz")]
+        [TestCase("Sample_Saga_Vol.١٤.cbz")]
         public void should_not_parse_series_volume_when_absent(string fileName)
         {
             MangaVolumeParser.TryParseSeriesVolume(fileName, out _, out _).Should().BeFalse();
@@ -94,6 +101,8 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("Solo Leveling Book 5", 5)]
         [TestCase("Some Novel", 0)]
         [TestCase("The Manga Cookbook 2", 0)]
+        [TestCase("Sample Saga Vol. １４", 0)]
+        [TestCase("Sample Saga 第１４巻", 0)]
         [TestCase("", 0)]
         public void should_parse_single_volume_number(string text, int expected)
         {

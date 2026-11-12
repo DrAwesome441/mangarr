@@ -1,15 +1,10 @@
-using System;
 using System.Globalization;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.MediaFiles;
-using NzbDrone.Core.MediaFiles.Chapters;
 using NzbDrone.Core.Parser;
 using NzbDrone.Core.Qualities;
 
@@ -92,16 +87,22 @@ namespace NzbDrone.Core.Extras.Metadata.ComicInfo
                 return null;
             }
 
-            try
-            {
-                using var zip = ZipFile.OpenRead(file.Path);
+            return ArchivePages.Count(file.Path);
+        }
 
-                return zip.Entries.Count(e => ChapterVolumeAssembler.PageExtensions.Contains(Path.GetExtension(e.FullName)));
-            }
-            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException)
+        // Volume titles (2026-11-07): a volume with a title of its own is titled the way its page is
+        // ("<series>: <title> (Vol. N)", LightNovelTitles.DisplayOf); one without keeps the edition's
+        // or the book's title, as before, so no archive is rewritten for the change alone.
+        private static string TitleOf(Author author, Book book, Edition edition)
+        {
+            var display = LightNovelTitles.DisplayOf(author, book);
+
+            if (display.IsNotNullOrWhiteSpace())
             {
-                return null;
+                return display;
             }
+
+            return edition?.Title.IsNotNullOrWhiteSpace() == true ? edition.Title : book.Title;
         }
 
         private static ComicInfoFields BuildFields(Author author, Book book, Edition edition, BookFile file)
@@ -112,7 +113,7 @@ namespace NzbDrone.Core.Extras.Metadata.ComicInfo
             return new ComicInfoFields
             {
                 Series = meta?.Name,
-                Title = edition?.Title.IsNotNullOrWhiteSpace() == true ? edition.Title : book.Title,
+                Title = TitleOf(author, book, edition),
                 Number = MangaVolumeParser.Format(book.VolumeNumber),
                 Summary = edition?.Overview,
                 Year = release?.Year,

@@ -2763,5 +2763,6 @@
     "FanTranslationChapters": "Traduction de fans, chapitres {first}–{last}",
     "ChapterSingle": "Chapitre {chapter}",
     "Chapters": "Chapitres",
-    "ChaptersRange": "Chapitres {first}–{last}"
+    "ChaptersRange": "Chapitres {first}–{last}",
+    "ServerImportFewerPagesThanCatalogue": "Contient {pages} pages ; le catalogue en indique {listed} pour ce tome"
 }

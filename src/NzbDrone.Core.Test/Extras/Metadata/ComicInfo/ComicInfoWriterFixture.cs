@@ -28,7 +28,8 @@ namespace NzbDrone.Core.Test.Extras.Metadata.ComicInfo
             {
                 foreach (var name in new[] { "0001.jpg", "0002.png", "0003.webp", "ComicInfo.xml", "notes.txt" })
                 {
-                    zip.CreateEntry(name);
+                    using var entry = zip.CreateEntry(name).Open();
+                    entry.WriteByte(0xFF);
                 }
             }
 
@@ -46,11 +47,36 @@ namespace NzbDrone.Core.Test.Extras.Metadata.ComicInfo
             File.Delete(_cbz);
         }
 
-        private void Write(Quality quality)
+        private void Write(Quality quality, string subtitle = null)
         {
             var file = new BookFile { Path = _cbz, EditionId = 5, Quality = new QualityModel(quality) };
 
-            Subject.WriteForFile(new Author { Metadata = new AuthorMetadata { Name = "Sample Series" } }, new Book { VolumeNumber = 9, Title = "Vol. 9" }, file);
+            Subject.WriteForFile(new Author { Metadata = new AuthorMetadata { Name = "Sample Series" } }, new Book { VolumeNumber = 9, Title = "Sample Series Vol. 9", Subtitle = subtitle }, file);
+        }
+
+        // Volume titles (2026-11-07): the Title element reads like the volume page.
+        [Test]
+        public void a_volume_with_its_own_title_writes_it_into_the_title()
+        {
+            Write(Quality.CBZ, "The Long Night");
+
+            _written.Should().Contain("<Title>Sample Series: The Long Night (Vol. 9)</Title>");
+        }
+
+        [Test]
+        public void a_volume_without_a_title_keeps_the_book_title()
+        {
+            Write(Quality.CBZ);
+
+            _written.Should().Contain("<Title>Sample Series Vol. 9</Title>");
+        }
+
+        [Test]
+        public void a_junk_title_is_not_written()
+        {
+            Write(Quality.CBZ, "Volume Nine");
+
+            _written.Should().Contain("<Title>Sample Series Vol. 9</Title>");
         }
 
         [Test]

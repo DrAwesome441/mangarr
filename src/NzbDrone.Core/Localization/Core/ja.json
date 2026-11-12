@@ -2761,5 +2761,6 @@
     "FanTranslationChapters": "ファン翻訳（第{first}–{last}話）",
     "ChapterSingle": "第{chapter}話",
     "Chapters": "話",
-    "ChaptersRange": "第{first}–{last}話"
+    "ChaptersRange": "第{first}–{last}話",
+    "ServerImportFewerPagesThanCatalogue": "{pages} ページしかありません。カタログではこの巻は {listed} ページです"
 }

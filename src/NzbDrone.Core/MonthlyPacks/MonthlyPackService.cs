@@ -12,6 +12,7 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.Download;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.History;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.IndexerSearch.Definitions;
@@ -490,6 +491,14 @@ namespace NzbDrone.Core.MonthlyPacks
                     _downloadService.DownloadReport(remoteBook, null).GetAwaiter().GetResult();
                     grabbed.AddRange(books);
                     _logger.Info("Grabbed {0} volume(s) from monthly pack '{1}': {2}", books.Count, pack.Release.Title, string.Join(", ", books));
+                }
+                catch (DownloadClientRejectedReleaseException ex)
+                {
+                    // The client refused the pack on purpose -- it already holds this torrent and Mangarr never
+                    // grabbed it (added by hand or by another app), so Mangarr leaves it alone by design. The
+                    // pack comes back every run while the volumes stay wanted; that is a state to know about,
+                    // not an error, so one Info line per run instead of a daily warning.
+                    _logger.Info("Monthly pack '{0}' left alone: {1}. Remove that torrent from the download client to let Mangarr grab the pack, or import the volumes by hand.", pack.Release.Title, ex.Message);
                 }
                 catch (Exception ex)
                 {
